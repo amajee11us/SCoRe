@@ -31,8 +31,9 @@ class CIFAR10Dataset(Dataset):
 
         self.data_path = data_path
         if not os.path.exists(self.data_path):
-            raise Exception("Data path: {} does not exist for split {}".format(
+            print("Data path: {} does not exist for split {}".format(
                 self.data_path, self.split))
+            download = True
         else:
             # No need to download thus override (since path exists)
             download = False
@@ -87,7 +88,7 @@ if __name__ == "__main__":
                              std=[x / 255.0 for x in [63.0, 62.1, 66.7]])
     ])
     print('Unit test')
-    cifar10_data = CIFAR10Dataset('/home/shared/anay/ton_618/data/cifar10',
+    cifar10_data = CIFAR10Dataset('/home/shared/anay/SCoRe/data/cifar10',
                                   'train',
                                   transform=transformations)
 
