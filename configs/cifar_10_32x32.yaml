@@ -1,0 +1,31 @@
+EXP_NAME: "cifar_10_32x32"
+DEVICE: "gpu"
+TRAIN:
+    LEARNING_RATE: 0.01
+    IMAGE_SIZE: 224 # resized from 32
+    DATASET:
+        NAME: "cifar10"
+        RESIZE: True
+        RANDOM_CROP: True
+        CROP_SIZE: 224
+        PIL: True
+        NORM_MEAN: [0.491, 0.482, 0.446]
+        NORM_STD_DEV: [0.247, 0.244, 0.262]
+    DATA_DIR: 'data/cifar10'
+    BATCH_SIZE: 128
+    NUM_CLASSES: 10
+    NUM_EPOCHS: 20
+
+PRINT_FREQUENCY: 100
+
+TEST:
+    DATASET:
+        NAME: "cifar10"
+        NORM_MEAN: [0.491, 0.482, 0.446]
+        NORM_STD_DEV: [0.247, 0.244, 0.262]
+        PIL: True
+        RESIZE: True
+        RANDOM_CROP: True
+        CROP_SIZE: 224
+    BATCH_SIZE: 128
+    DATA_DIR: 'data/cifar10'
