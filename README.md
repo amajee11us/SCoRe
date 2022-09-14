@@ -1,5 +1,5 @@
-# SCoRe - Submodular Combinatorial Regularization 
-This repository aims to create a benchmark for submodular combinatorial regularizers for representation learning tasks. 
+# SCoRe - Submodular Combinatorial Representation Learning 
+This repository aims to create a benchmark for submodular combinatorial loss functions for representation learning tasks. 
 We benchmark widely adopted objective functions like contrastive loss, triplet loss, margin penalties etc. for image classification tasks against
 submodular functions (added as regularizers). 
 
