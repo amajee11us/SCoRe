@@ -1,0 +1,13 @@
+name: score
+channels:
+  - defaults
+dependencies:
+  - python=3.9
+  - torchvision
+  - torchaudio
+  - cudatoolkit=11.3
+  - pytorch
+  - easydict
+  - tensorboardx
+  - pyyaml
+prefix: /home/shared/anay/anaconda3/envs/score

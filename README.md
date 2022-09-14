@@ -8,6 +8,20 @@ The aim of this experiment is to show that submodular functions lead to the form
 ## Installation
 The following packages are required to be installed before running training and evaluation operations.
 
+a. Pytorch >= 1.8 ```conda install pytorch==1.11.0 torchvision==0.12.0 torchaudio==0.11.0 cudatoolkit=11.3 -c pytorch```
+
+b. torchvision >=0.8.2 (install with torch)
+
+c. easydict - ``` conda install -c conda-forge  easydict```
+
+d. tensorboardx - ``` conda install -c conda-forge tensorboardx ```
+
+e. pyyaml - ``` conda install pyyaml ```
+
+f. numpy >= 1.18
+
+For reproducing the results on a 64-bit Ubuntu machine with a RTX A6000 GPU an ```environment.yml``` file has been included for reference.
+
 ## Objective Functions (TBD)
 ### Triplet Loss
 
