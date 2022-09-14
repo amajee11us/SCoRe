@@ -42,7 +42,12 @@ The evaluation of the model on the validation dataset will occur at the end of e
 TBD
 
 ## Results
-TBD
+The results for each experiment is tabulated below.
+
+| Algorithm             | Config File | Loss Function |F1-score | Acc @ top1 | Acc @ top5 |
+|---                    |:---:        |:---:          |:---:    |:---:       |:---:       |
+|AlexNet_CIFAR-10_32x32 (baseline)| [link](configs/cifar_10_32x32.yaml)  | CE |         |71.17       |97.0        |
+|AlexNet_CIFAR-10_32x32 | [link]()  | CE + CosSim         |       |        |
 
 ## References
 TBD
