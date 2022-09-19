@@ -2,6 +2,7 @@ import torch
 import shutil
 import logging
 
+from sklearn.metrics import f1_score
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -59,6 +60,22 @@ def accuracy(output, target, topk=(1, )):
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
 
-'''
-TODO: Calulate F1 score
-'''
+def f1_loss(y_pred, y_true, is_training=False):
+    '''
+    Calculate F1 score. Can work with gpu tensors    
+    '''
+    assert y_true.ndim == 1
+    assert y_pred.ndim == 1 or y_pred.ndim == 2
+    
+    if y_pred.ndim == 2:
+        y_pred = y_pred.argmax(dim=1)
+        
+    # print(y_true)
+    # print(y_pred)
+
+    y_true = y_true.cpu().data.numpy()
+    y_pred = y_pred.cpu().data.numpy()
+
+    F1 = f1_score(y_true, y_pred, average='macro')
+
+    return F1 * 100

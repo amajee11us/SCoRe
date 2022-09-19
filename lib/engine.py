@@ -1,7 +1,7 @@
 import torch
 import time
 import logging
-from .meters import AverageMeter, ProgressMeter, accuracy
+from .meters import AverageMeter, ProgressMeter, accuracy, f1_loss
 from .utils import get_lr
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -22,12 +22,14 @@ def train(train_loader, model, criterion, optimizer, epoch, cfg, writer=None):
     losses = AverageMeter('Loss', ':4.4f')
     top1 = AverageMeter('Acc@1', ':6.2f')
     top5 = AverageMeter('Acc@5', ':6.2f')
+    f1 = AverageMeter('f1', ':6.2f')
     progress = ProgressMeter(len(train_loader),
                              batch_time,
                              data_time,
                              losses,
                              top1,
                              top5,
+                             f1,
                              prefix="Epoch: [{}]".format(epoch))
 
     #switch to training
@@ -44,9 +46,11 @@ def train(train_loader, model, criterion, optimizer, epoch, cfg, writer=None):
         loss = criterion(output, label)
 
         acc1, acc5 = accuracy(output, label, topk=(1, 5))
+        f1_score = f1_loss(output, label)
         losses.update(loss.item(), images.size(0))
         top1.update(acc1[0], images.size(0))
         top5.update(acc5[0], images.size(0))
+        f1.update(f1_score.item(), images.size(0))
 
         #compute gradient and do Adam step
         optimizer.zero_grad()
@@ -79,11 +83,13 @@ def validate(val_loader, model, criterion, cfg, writer=None):
     losses = AverageMeter('Loss', ':4.4f')
     top1 = AverageMeter('Acc@1', ':6.2f')
     top5 = AverageMeter('Acc@5', ':6.2f')
+    f1 = AverageMeter('f1', ':6.2f')
     progress = ProgressMeter(len(val_loader),
                              batch_time,
                              losses,
                              top1,
                              top5,
+                             f1,
                              prefix='Test: ')
 
     # switch to evaluate mode
@@ -101,9 +107,11 @@ def validate(val_loader, model, criterion, cfg, writer=None):
 
             # measure accuracy and record loss
             acc1, acc5 = accuracy(output, label, topk=(1, 5))
+            f1_score = f1_loss(output, label)
             losses.update(loss.item(), images.size(0))
             top1.update(acc1[0], images.size(0))
             top5.update(acc5[0], images.size(0))
+            f1.update(f1_score.item(), images.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -116,11 +124,12 @@ def validate(val_loader, model, criterion, cfg, writer=None):
                     writer.add_scalar('Val_loss', loss.item(), total_val_steps)
                     writer.add_scalar('Val_acc_1', acc1[0], total_val_steps)
                     writer.add_scalar('Val_acc_5', acc5[0], total_val_steps)
+                    writer.add_scalar('Val_f1_score', f1_score, total_val_steps)
 
             total_val_steps += 1
 
-        logging.info(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'.format(
-            top1=top1, top5=top5))
+        logging.info(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f} F1 {f1_score.avg:.3f}'.format(
+            top1=top1, top5=top5, f1_score=f1))
 
     return top1.avg
 
