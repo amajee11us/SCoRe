@@ -8,12 +8,10 @@ import logging
 from lib.utils import get_target_device
 
 class GraphCut(nn.Module):
-    def __init__(self, num_classes, input_dims, batch_size, lamda = 0.5):
+    def __init__(self, metric='euclidean', lamda = 0.5):
         super(GraphCut, self).__init__()
-        self.num_input = batch_size
-        self.input_dims = input_dims
-        self.num_classes = num_classes
-
+        # determine the metric
+        self.sim_metric = metric
         # determine the constant
         self.lamda = lamda
 
@@ -28,22 +26,34 @@ class GraphCut(nn.Module):
       4. Calculate the separation between negative classes in  batch and minimize it (euc distance).
       '''
       unique_class_labels = torch.unique(Y_set)
+      loss = 0
 
-      for cls in unique_class_labels:
+      for iter in range(unique_class_labels.shape[0]):
         pos_set, neg_set = [], []
-
+        
         for fid in range(Y_set.shape[0]):
-          if Y_set[fid] == cls:
+          if Y_set[fid] == unique_class_labels[iter]:
             pos_set.append(X_set[fid])
           else:
             neg_set.append(X_set[fid])
         
-        pos_dist_matrix = torch.cdist(torch.tensor(pos_set), torch.tensor(pos_set),2)
-        neg_dist_matrix = torch.cdist(torch.tensor(pos_set), torch.tensor(neg_set),2)
+        # stack tensors 
+        pos_set = torch.stack(pos_set)
+        neg_set = torch.stack(neg_set)
+        
+        if self.sim_metric == 'euclidean':
+          pos_dist_matrix = torch.cdist(pos_set, pos_set,2)
+          neg_dist_matrix = torch.cdist(pos_set, neg_set,2)
+        elif self.sim_metric == 'cosSim':
+          pos_dist_matrix = torch.norm(pos_set).T * torch.norm(pos_set)
+          neg_dist_matrix = torch.norm(pos_set).T * torch.norm(neg_set)
+
         pos_sum = torch.sum(pos_dist_matrix)
         neg_sum = torch.sum(neg_dist_matrix)
 
-        return neg_sum - self.lamda * pos_sum
+        loss += neg_sum - self.lamda * pos_sum
+
+      return loss
     
     def __calculateSampleSeparation(self,x_i, x_j, exp = 2):
 
