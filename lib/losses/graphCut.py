@@ -15,6 +15,8 @@ class GraphCut(nn.Module):
         # determine the constant
         self.lamda = lamda
 
+        self.cos = nn.CosineSimilarity(dim=1, eps=1e-6)
+
     def forward(self, X_set, Y_set):
       '''
       X_set : this is the feature set from the feature extractor
@@ -27,6 +29,7 @@ class GraphCut(nn.Module):
       '''
       unique_class_labels = torch.unique(Y_set)
       loss = 0
+      X_set = X_set.reshape(X_set.shape[0], -1)
 
       for iter in range(unique_class_labels.shape[0]):
         pos_set, neg_set = [], []
@@ -45,13 +48,22 @@ class GraphCut(nn.Module):
           pos_dist_matrix = torch.cdist(pos_set, pos_set,2)
           neg_dist_matrix = torch.cdist(pos_set, neg_set,2)
         elif self.sim_metric == 'cosSim':
-          pos_dist_matrix = torch.norm(pos_set).T * torch.norm(pos_set)
-          neg_dist_matrix = torch.norm(pos_set).T * torch.norm(neg_set)
+          pos_set_norm = torch.norm(pos_set, p=2, dim=1).unsqueeze(1).expand_as(pos_set)
+          pos_set_normalized = pos_set.div(pos_set_norm + 1e-5)
+          neg_set_norm = torch.norm(neg_set, p=2, dim=1).unsqueeze(1).expand_as(neg_set)
+          neg_set_normalized = neg_set.div(neg_set_norm + 1e-5)
+          
+          pos_dist_matrix = torch.matmul(pos_set_normalized, pos_set_normalized.T)
+          neg_dist_matrix = torch.matmul(pos_set_normalized, neg_set_normalized.T)
 
         pos_sum = torch.sum(pos_dist_matrix)
         neg_sum = torch.sum(neg_dist_matrix)
 
-        loss += neg_sum - self.lamda * pos_sum
+
+        if self.sim_metric == 'euclidean':
+          loss += pos_sum - self.lamda * neg_sum
+        else:
+          loss += neg_sum - self.lamda * pos_sum
 
       return loss
     

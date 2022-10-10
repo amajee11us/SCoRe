@@ -3,6 +3,7 @@ import time
 import logging
 from .meters import AverageMeter, ProgressMeter, accuracy, f1_loss
 from .utils import get_lr
+from lib.losses.graphCut import GraphCut
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 '''
@@ -12,10 +13,13 @@ total_train_steps = 1
 total_val_steps = 1
 
 
-def train(train_loader, model, criterion, optimizer, epoch, cfg, writer=None):
+def train(train_loader, model, criterion, optimizer, epoch, cfg, comb_optim=None, writer=None):
     '''
     Train over one epoch on a mini-batch
     '''
+    # step count
+    step_count = int(len(train_loader)/ cfg.TRAIN.BATCH_SIZE)
+
     global total_train_steps
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
@@ -23,7 +27,7 @@ def train(train_loader, model, criterion, optimizer, epoch, cfg, writer=None):
     top1 = AverageMeter('Acc@1', ':6.2f')
     top5 = AverageMeter('Acc@5', ':6.2f')
     f1 = AverageMeter('f1', ':6.2f')
-    progress = ProgressMeter(len(train_loader),
+    progress = ProgressMeter(step_count,
                              batch_time,
                              data_time,
                              losses,
@@ -36,14 +40,23 @@ def train(train_loader, model, criterion, optimizer, epoch, cfg, writer=None):
     model.train()
 
     end = time.time()
-    for i, (images, label) in enumerate(train_loader):
+
+    for i in range(step_count):
+        images, label = next(iter(train_loader))
         data_time.update(time.time() - end)
 
-        images = images.to(device)
-        label = label.to(device)
+        images = images[0].to(device)
+        label = torch.flatten(torch.stack(label)).to(device)
 
-        output = model(images)
+        features, output = model(images)
         loss = criterion(output, label)
+
+        # Add the combinatorial objective
+        #gc = GraphCut(metric = 'cosSim', lamda = 0.5)
+        if comb_optim is not None:
+            loss_comb = comb_optim(features, label)
+            #print(loss_comb)
+            loss += (1.0/ images.size(0)) * loss_comb
 
         acc1, acc5 = accuracy(output, label, topk=(1, 5))
         f1_score = f1_loss(output, label)
@@ -74,10 +87,12 @@ def train(train_loader, model, criterion, optimizer, epoch, cfg, writer=None):
         total_train_steps += 1
 
 
-def validate(val_loader, model, criterion, cfg, writer=None):
+def validate(val_loader, model, criterion, cfg, comb_optim, writer=None):
     '''
     Validate over one pass on the validation set
     '''
+    step_count = int(len(val_loader)/ cfg.TEST.BATCH_SIZE)
+
     global total_val_steps
     batch_time = AverageMeter('Time', ':6.3f')
     losses = AverageMeter('Loss', ':4.4f')
@@ -97,13 +112,20 @@ def validate(val_loader, model, criterion, cfg, writer=None):
 
     with torch.no_grad():
         end = time.time()
-        for i, (images, label) in enumerate(val_loader):
-            images = images.to(device)
-            label = label.to(device)
+
+        for i in range(step_count):
+            images, label = next(iter(val_loader))
+            images = images[0].to(device)
+            label = torch.flatten(torch.stack(label)).to(device)
 
             # compute output
-            output = model(images)
+            features, output = model(images)
             loss = criterion(output, label)
+
+            if comb_optim is not None:
+                loss_comb = comb_optim(features, label)
+                #print(loss_comb)
+                loss += (1.0/images.size(0)) * loss_comb
 
             # measure accuracy and record loss
             acc1, acc5 = accuracy(output, label, topk=(1, 5))
