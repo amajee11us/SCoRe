@@ -72,6 +72,7 @@ def load_and_apply(cfg, transforms, split):
     elif "cifar10" in dataset_params.DATASET.NAME:
         dataset = CIFAR10Dataset(data_path=dataset_params.DATA_DIR,
                                  split=split,
+                                 batch_size=cfg.TRAIN.BATCH_SIZE,
                                  transform=transforms)
     else:
         logging.error(
@@ -93,7 +94,8 @@ def build_dataset(cfg, split='train'):
         "Dataset created: {} split \n \t\tTOTAL_COUNT : {} \n \t\tNUM_CLASSES: {}"
         .format(split, len(data_object), cfg.TRAIN.NUM_CLASSES))
 
-    batch_size = cfg.TRAIN.BATCH_SIZE if "train" in split else cfg.TEST.BATCH_SIZE
+    #batch_size = cfg.TRAIN.BATCH_SIZE if "train" in split else cfg.TEST.BATCH_SIZE
+    batch_size = 1
 
     #torch iterable loader
     loader = torch.utils.data.DataLoader(data_object,

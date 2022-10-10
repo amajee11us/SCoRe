@@ -1,3 +1,4 @@
+from tkinter import image_names
 import torch
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
@@ -6,13 +7,14 @@ from torchvision.datasets import CIFAR10
 from PIL import Image
 import numpy as np
 import os
-
+import random
 
 class CIFAR10Dataset(Dataset):
     def __init__(self,
                  data_path,
                  split,
                  transform=None,
+                 batch_size = 160,
                  num_classes=10,
                  random_seed=42,
                  download=True):
@@ -56,20 +58,35 @@ class CIFAR10Dataset(Dataset):
         self.classes = {i : class_names[i] for i in range(len(class_names))}
 
         # store as merged list
-        data = _cifar10_obj.data
+        self.data = _cifar10_obj.data
         labels = np.array(_cifar10_obj.targets)
-        self.data_store = list(zip(data, labels))
+        self.data_store = list(zip(self.data, labels))
 
         # generate random shuffled samples
         np.random.seed(random_seed)
         np.random.shuffle(self.data_store)
 
+        self.items_per_class = int(batch_size / num_classes)
+        self.image_ids_per_class = {}
+        for class_id in self.classes.keys():
+            self.image_ids_per_class[class_id] = [i for i, x in enumerate(_cifar10_obj.targets) if x == class_id]
+        
+        self.list_class_ids = [i for i in self.classes.keys()]
+        print(self.list_class_ids)
+
     def __getitem__(self, index):
         # Fetch an indexed entry in the image list
         img, label = self.data_store[index]
 
-        if self.transform is not None:
-            img = self.transform(img)
+        img, label = [], []
+
+        for class_id in self.list_class_ids:
+            label.extend([class_id]*self.items_per_class) 
+            img.extend([self.transform(self.data[i]) for i in random.sample(self.image_ids_per_class[class_id], self.items_per_class)])
+
+        img = torch.stack(img)
+        # if self.transform is not None:
+        #     img = self.transform(img)
 
         return (img, label)
 
@@ -90,11 +107,19 @@ if __name__ == "__main__":
     print('Unit test')
     cifar10_data = CIFAR10Dataset('/home/shared/anay/SCoRe/data/cifar10',
                                   'train',
+                                  batch_size=100,
                                   transform=transformations)
 
     train_loader = torch.utils.data.DataLoader(dataset=cifar10_data,
-                                               batch_size=10,
+                                               batch_size=1,
                                                shuffle=True)
     print(len(cifar10_data))
     x, y = next(iter(train_loader))
-    print(x.shape, y.shape, [cifar10_data.classes[y_] for y_ in y.data.numpy()])
+    print(x)
+    
+    y = torch.flatten(torch.stack(y))
+    print(y.shape)
+    print(x.shape)
+    print(y)
+
+    #print(x.shape, y.shape, [cifar10_data.classes[y_] for y_ in y.data.numpy()])
