@@ -61,7 +61,7 @@ def parse_args():
                         help = 'Boolean variable to indicate whether to use wandb for logging')
     parser.add_argument('--gpu_num',
                         default=1,
-                        type = list,
+                        type = int,
                         help = 'GPU device number to use for training')
     args = parser.parse_args()
     return args
