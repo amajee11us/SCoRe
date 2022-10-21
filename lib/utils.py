@@ -14,6 +14,9 @@ def Logger(cfg):
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
 
+    #Make output directory
+    os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+    
     # set up logging to file
     logging.basicConfig(
         filename=os.path.join(cfg.OUTPUT_DIR, 'log.log'),

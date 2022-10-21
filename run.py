@@ -2,11 +2,10 @@ import torch
 import logging
 from tensorboardX import SummaryWriter
 from torchsummary import summary
-
+import wandb
 import os
 import argparse
 import pprint
-
 # import module classes
 from datasets import imagenet
 # from dataset import mini_imagenet
@@ -37,7 +36,7 @@ def parse_args():
     parser.add_argument('-c',
                         '--config_file',
                         dest='config_file',
-                        default='configs/alexnet_224x224.yaml',
+                        default='configs/cifar_10_32x32.yaml',
                         help='model architecture (default: alexnet)')
     parser.add_argument('--resume',
                         default=None,
@@ -48,7 +47,14 @@ def parse_args():
                         default=None,
                         type=int,
                         help='seed for initializing training. ')
-
+    parser.add_argument('--rep_loss',
+                        default='gc',
+                        type=str,
+                        help='Representation learning loss objective')
+    parser.add_argument('--wandb',
+                        default=False,
+                        type = bool,
+                        help = 'Boolean variable to indicate whether to use wandb for logging')
     args = parser.parse_args()
     return args
 
@@ -75,28 +81,39 @@ def main():
         seed = torch.manual_seed(args.seed)
     log.info("Using Seed : {}".format(seed))
 
+    if args.wandb:
+        wandb_key = "bf3796e4dbd7c4ce41c9b39acba9a6644256c5d9"
+        os.environ["WANDB_API_KEY"] =  wandb_key
+        wandb.init(project="combinatorial_regularizers", config=cfg, entity="krishnatejakk", settings=wandb.Settings(code_dir="."))
+    
     # create model and load to device
-    alexnet = factory.build_model(cfg)
-    log.info(alexnet)
+    model = factory.build_model(cfg)
+    log.info(model)
+    if args.wandb:
+        wandb.watch(model)
 
     #summary(alexnet, input_size=(3, 224, 224))
 
     # Create optimizer
-    optimizer = build_optimizer(cfg, alexnet)
+    optimizer = build_optimizer(cfg, model)
     # Create an LR scheduler, Multiply rate by 0.1 every LR_STEP
     lr_scheduler = build_lr_scheduler(cfg, optimizer)
     # Define loss criterion
     criterion = torch.nn.CrossEntropyLoss().to(device)
     # Define the combinatorial objective
-    #gc = GraphCut(metric = 'cosSim', lamda = 0.9)
-    gc = SupervisedContrastiveLoss(cfg, temperature=0.1)
+    if args.rep_loss == 'gc':
+       gc = GraphCut(metric = 'cosSim', lamda = 0.9)
+    elif args.rep_loss == 'supcon':
+        gc = SupervisedContrastiveLoss(cfg, temperature=0.1)
+    else:
+        gc = None
     #gc = None
     '''
     Resume from a checkpoint
     pass the model and the optimizer and load the stuff
     '''
     if not args.resume == None:
-        resume_from_ckpt(args.resume, alexnet, optimizer)
+        resume_from_ckpt(args.resume, model, optimizer)
     '''
     Load and prepare datasets
     Supported CIFAR10/Imagenet.
@@ -109,16 +126,18 @@ def main():
     # Set the initial param for best accuracy to beat
     best_acc1 = 0
 
+    acc1 = validate(val_loader, model, criterion, -1, cfg, gc, writer=tbwriter, wandb_var=args.wandb)
+
     # Train over the dataset
     for epoch in range(cfg.TRAIN.NUM_EPOCHS):
         # adjust_learning_rate(optimizer, epoch, cfg)
 
         # train one epoch on the target device
-        train(train_loader, alexnet, criterion, optimizer, epoch, cfg, gc,
-              writer=tbwriter)
+        train(train_loader, model, criterion, optimizer, epoch, cfg, gc,
+              writer=tbwriter, wandb_var = args.wandb)
 
         # Get the top1 accuracy from the validation set
-        acc1 = validate(val_loader, alexnet, criterion, cfg, gc, writer=tbwriter)
+        acc1 = validate(val_loader, model, criterion, epoch, cfg, gc, writer=tbwriter, wandb_var = args.wandb)
 
         # step on the learning-rate
         lr_scheduler.step()

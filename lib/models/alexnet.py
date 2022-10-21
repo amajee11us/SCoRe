@@ -59,11 +59,11 @@ class AlexNet(nn.Module):
         x = self.conv_feat(x)
         #Now average pool and flatten : increases precision
         x = self.avgpool(x)
-        x = x.reshape(-1, 256 * 6 * 6)  # reduce the dimensions for linear layer input
+        features = x.reshape(-1, 256 * 6 * 6)  # reduce the dimensions for linear layer input
 
-        x = self.classifier(x)
+        x = self.classifier(features)
         # return an array of (NUM_CLASSES dim with probabilities of each class) x batch_size
-        return x
+        return features, x
 
     def __init_weights(self):
         '''

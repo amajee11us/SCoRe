@@ -1,6 +1,7 @@
 import torch
 import time
 import logging
+import wandb
 from .meters import AverageMeter, ProgressMeter, accuracy, f1_loss
 from .utils import get_lr
 from lib.losses.graphCut import GraphCut
@@ -13,13 +14,13 @@ total_train_steps = 1
 total_val_steps = 1
 
 
-def train(train_loader, model, criterion, optimizer, epoch, cfg, comb_optim=None, writer=None):
+def train(train_loader, model, criterion, optimizer, epoch, cfg, comb_optim=None, writer=None, wandb_var=False):
     '''
     Train over one epoch on a mini-batch
     '''
     # step count
     step_count = int(len(train_loader)/ cfg.TRAIN.BATCH_SIZE)
-
+    #prev_steps = step_count * epoch
     global total_train_steps
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
@@ -50,13 +51,20 @@ def train(train_loader, model, criterion, optimizer, epoch, cfg, comb_optim=None
 
         features, output = model(images)
         loss = criterion(output, label)
-
+        clf_loss = loss.item()
+        repr_loss = 0
         # Add the combinatorial objective
         #gc = GraphCut(metric = 'cosSim', lamda = 0.5)
         if comb_optim is not None:
             loss_comb = comb_optim(features, label)
+            repr_loss = (1.0/ images.size(0)) * loss_comb.item()
             #print(loss_comb)
             loss += (1.0/ images.size(0)) * loss_comb
+
+        #compute gradient and do Adam step
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
         acc1, acc5 = accuracy(output, label, topk=(1, 5))
         f1_score = f1_loss(output, label)
@@ -64,15 +72,24 @@ def train(train_loader, model, criterion, optimizer, epoch, cfg, comb_optim=None
         top1.update(acc1[0], images.size(0))
         top5.update(acc5[0], images.size(0))
         f1.update(f1_score.item(), images.size(0))
-
-        #compute gradient and do Adam step
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        #Elapsed time
-        batch_time.update(time.time() - end)
+        curr_batch_time = time.time() - end
+        batch_time.update(curr_batch_time)
         end = time.time()
+        
+        if wandb_var:
+            logger = {'Train_steps': total_train_steps,
+                    'Train_clf_loss': clf_loss,
+                    'Train_repr_loss': repr_loss,
+                    'Train_acc_1': acc1[0],
+                    'Train_acc_5': acc5[0],
+                    'Train_LR': get_lr(optimizer),
+                    'Train_f1': f1_score,
+                    'Train_batch_time': curr_batch_time 
+                    }
+
+            wandb.log(logger)        
+        #Elapsed time
+        
 
         if i % cfg.PRINT_FREQUENCY == 0:
             progress.print(i)
@@ -87,7 +104,7 @@ def train(train_loader, model, criterion, optimizer, epoch, cfg, comb_optim=None
         total_train_steps += 1
 
 
-def validate(val_loader, model, criterion, cfg, comb_optim, writer=None):
+def validate(val_loader, model, criterion, epoch, cfg, comb_optim, writer=None, wandb_var=False):
     '''
     Validate over one pass on the validation set
     '''
@@ -112,7 +129,9 @@ def validate(val_loader, model, criterion, cfg, comb_optim, writer=None):
 
     with torch.no_grad():
         end = time.time()
-
+        clf_loss = 0
+        repr_loss = 0
+        total_images = 0
         for i in range(step_count):
             images, label = next(iter(val_loader))
             images = images[0].to(device)
@@ -121,9 +140,11 @@ def validate(val_loader, model, criterion, cfg, comb_optim, writer=None):
             # compute output
             features, output = model(images)
             loss = criterion(output, label)
-
+            clf_loss += (loss.item() * images.size(0))
+            total_images += images.size(0)
             if comb_optim is not None:
                 loss_comb = comb_optim(features, label)
+                repr_loss = loss_comb.item()
                 #print(loss_comb)
                 loss += (1.0/images.size(0)) * loss_comb
 
@@ -149,7 +170,16 @@ def validate(val_loader, model, criterion, cfg, comb_optim, writer=None):
                     writer.add_scalar('Val_f1_score', f1_score, total_val_steps)
 
             total_val_steps += 1
-
+        
+        if wandb_var:
+            logger = {'Epoch': epoch+1,
+                    'Val_clf_loss': clf_loss/total_images,
+                    'Val_repr_loss': repr_loss/total_images,
+                    'Val_acc_1': top1.avg,
+                    'Val_acc_5': top5.avg,
+                    'Val_f1': f1.avg
+                    }
+            wandb.log(logger)
         logging.info(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f} F1 {f1_score.avg:.3f}'.format(
             top1=top1, top5=top5, f1_score=f1))
 

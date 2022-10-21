@@ -10,4 +10,5 @@ dependencies:
   - easydict
   - tensorboardx
   - pyyaml
+  - wandb
 prefix: /home/shared/anay/anaconda3/envs/score

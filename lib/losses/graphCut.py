@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
+import wandb
 import torch
 import torch.nn as nn
 import logging
@@ -45,8 +45,12 @@ class GraphCut(nn.Module):
         neg_set = torch.stack(neg_set)
         
         if self.sim_metric == 'euclidean':
-          pos_dist_matrix = torch.cdist(pos_set, pos_set,2)
-          neg_dist_matrix = torch.cdist(pos_set, neg_set,2)
+          pos_dist_matrix = torch.cdist(pos_set, pos_set,2)**2
+          neg_dist_matrix = torch.cdist(pos_set, neg_set,2)**2
+          pos_dist_matrix = torch.exp(-pos_dist_matrix/(0.1*pos_dist_matrix.mean()))
+          neg_dist_matrix = torch.exp(-neg_dist_matrix/(0.1*neg_dist_matrix.mean()))
+          pos_dist_matrix_wo_diag =  pos_dist_matrix.masked_select(~torch.eye(pos_dist_matrix.shape[0], dtype=bool)).view(pos_dist_matrix.shape[0], pos_dist_matrix.shape[0] - 1)
+
         elif self.sim_metric == 'cosSim':
           pos_set_norm = torch.norm(pos_set, p=2, dim=1).unsqueeze(1).expand_as(pos_set)
           pos_set_normalized = pos_set.div(pos_set_norm + 1e-5)
@@ -54,19 +58,21 @@ class GraphCut(nn.Module):
           neg_set_normalized = neg_set.div(neg_set_norm + 1e-5)
           
           pos_dist_matrix = torch.matmul(pos_set_normalized, pos_set_normalized.T)
+          pos_dist_matrix_wo_diag =  pos_dist_matrix.masked_select(~torch.eye(pos_dist_matrix.shape[0], dtype=bool)).view(pos_dist_matrix.shape[0], pos_dist_matrix.shape[0] - 1)
           neg_dist_matrix = torch.matmul(pos_set_normalized, neg_set_normalized.T)
 
-        pos_sum = torch.sum(pos_dist_matrix)
-        neg_sum = torch.sum(neg_dist_matrix)
 
-
-        if self.sim_metric == 'euclidean':
-          loss += pos_sum - self.lamda * neg_sum
-        else:
-          loss += neg_sum - self.lamda * pos_sum
-
+        #Normalized Information Correlation for negative sets
+        neg_sum = torch.mean(neg_dist_matrix)
+        #Normalized Information Correlation for positive sets
+        pos_sum = torch.mean(pos_dist_matrix_wo_diag)
+        loss += (neg_sum - self.lamda * pos_sum)
       return loss
-    
+
+        #if self.sim_metric == 'euclidean':
+        #  loss += pos_sum - self.lamda * neg_sum
+        #else:
+        
     def __calculateSampleSeparation(self,x_i, x_j, exp = 2):
 
       n = x_i.size(0)
