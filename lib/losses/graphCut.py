@@ -47,8 +47,8 @@ class GraphCut(nn.Module):
         if self.sim_metric == 'rbf_kernel':
           pos_dist_matrix = torch.cdist(pos_set, pos_set,2)**2
           neg_dist_matrix = torch.cdist(pos_set, neg_set,2)**2
-          pos_dist_matrix = torch.exp(-pos_dist_matrix/(0.1*pos_dist_matrix.mean()))
-          neg_dist_matrix = torch.exp(-neg_dist_matrix/(0.1*neg_dist_matrix.mean()))
+          pos_dist_matrix = torch.exp(-pos_dist_matrix/(2))#torch.exp(-pos_dist_matrix/(0.1*pos_dist_matrix.mean()))
+          neg_dist_matrix = torch.exp(-neg_dist_matrix/(2))#torch.exp(-neg_dist_matrix/(0.1*neg_dist_matrix.mean()))
           pos_dist_matrix_wo_diag =  pos_dist_matrix.masked_select(~torch.eye(pos_dist_matrix.shape[0], dtype=bool).to(self.device)).view(pos_dist_matrix.shape[0], pos_dist_matrix.shape[0] - 1)
         elif self.sim_metric == 'euclidean':
           pos_dist_matrix = torch.cdist(pos_set, pos_set,2)
