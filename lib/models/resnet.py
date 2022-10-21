@@ -4,10 +4,7 @@ Reference
     Deep Residual Learning for Image Recognition
     https://arxiv.org/abs/1512.03385
 '''
-
-
-from functools import partial
-from typing import Any, Callable, List, Optional, Type, Union, TypeVar
+from typing import Any, Callable, List, Optional, Type, Union, TypeVar, Dict
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -34,6 +31,14 @@ def _ovewrite_value_param(param: str, actual: Optional[V], expected: V) -> V:
         if actual != expected:
             raise ValueError(f"The parameter '{param}' expected value {expected} but got {actual} instead.")
     return expected
+
+
+def _ovewrite_named_param(kwargs: Dict[str, Any], param: str, new_value: V) -> None:
+    if param in kwargs:
+        if kwargs[param] != new_value:
+            raise ValueError(f"The parameter '{param}' expected value {new_value} but got {kwargs[param]} instead.")
+    else:
+        kwargs[param] = new_value
 
 
 def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> nn.Conv2d:
