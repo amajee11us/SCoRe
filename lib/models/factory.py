@@ -15,26 +15,22 @@ from lib.utils import get_target_device
 # Add model implementations here
 from lib.models import alexnet as alexnet
 from lib.models import vgg16 as vgg16
-
+from lib.models import resnet18 as resnet18
 # Registry for models modelled as a dictionary
-ARCH_REGISTRY = {"alexnet": alexnet.AlexNet, "vgg16": vgg16.VGG16}
+ARCH_REGISTRY = {"alexnet": alexnet.AlexNet, "vgg16": vgg16.VGG16, "resnet18": resnet18}
 
 
-def build_model(cfg):
+def build_model(cfg, gpu_num):
     arch = cfg.ARCH  # fetch architecture
-
     if arch.lower() not in ARCH_REGISTRY.keys():
         logging.error("Model architecture not present in the registry.")
         return
     # We have the model. Register and return
     model = ARCH_REGISTRY.get(arch)(cfg)
     logging.info("Model loading done.")
-
-    model.to(get_target_device(cfg))
-
+    model.to(get_target_device(cfg, gpu_num))
     # Enable data parallal if GPU is found
     # TODO: test on multi-gpu setting
     if "gpu" in cfg.DEVICE:
         model = torch.nn.parallel.DataParallel(model, device_ids=cfg.GPU)
-
     return model

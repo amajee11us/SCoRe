@@ -60,8 +60,8 @@ def parse_args():
                         type = bool,
                         help = 'Boolean variable to indicate whether to use wandb for logging')
     parser.add_argument('--gpu_num',
-                        default=0,
-                        type = int,
+                        default=1,
+                        type = list,
                         help = 'GPU device number to use for training')
     args = parser.parse_args()
     return args
@@ -72,9 +72,9 @@ def main():
     # Get configuration
     cfg_from_file(args.config_file)
     cfg.OUTPUT_DIR = get_output_ckpt_dir(cfg)
+    cfg.GPU = [args.gpu_num]
 
     log.info("Reading config from file: {}".format(args.config_file))
-
     log.info(pprint.PrettyPrinter(indent=4).pprint(cfg))
     # Select appropriate device
     device = get_target_device(cfg, args.gpu_num)
@@ -95,7 +95,7 @@ def main():
         wandb.init(project="combinatorial_regularizers", config=cfg, entity="krishnatejakk", settings=wandb.Settings(code_dir="."))
     
     # create model and load to device
-    model = factory.build_model(cfg)
+    model = factory.build_model(cfg, args.gpu_num)
     log.info(model)
     if args.wandb:
         wandb.watch(model)

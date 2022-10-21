@@ -17,7 +17,7 @@ __C.GPU = [0]  # pass a set of GPUS for data-parallel
 
 __C.PRINT_FREQUENCY = 10
 
-__C.ARCH = "alexnet"
+__C.ARCH = "resnet18"
 
 __C.EXP_NAME = "basic_224"
 
