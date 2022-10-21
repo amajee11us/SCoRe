@@ -6,7 +6,7 @@ from .meters import AverageMeter, ProgressMeter, accuracy, f1_loss
 from .utils import get_lr
 from lib.losses.graphCut import GraphCut
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 '''
 Keep track of the steps covered and write to TB
 '''
@@ -14,7 +14,7 @@ total_train_steps = 1
 total_val_steps = 1
 
 
-def train(train_loader, model, criterion, optimizer, epoch, cfg, comb_optim=None, writer=None, wandb_var=False):
+def train(train_loader, model, criterion, optimizer, epoch, cfg, comb_optim=None, writer=None, wandb_var=False, device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
     '''
     Train over one epoch on a mini-batch
     '''
@@ -104,7 +104,7 @@ def train(train_loader, model, criterion, optimizer, epoch, cfg, comb_optim=None
         total_train_steps += 1
 
 
-def validate(val_loader, model, criterion, epoch, cfg, comb_optim, writer=None, wandb_var=False):
+def validate(val_loader, model, criterion, epoch, cfg, comb_optim, writer=None, wandb_var=False, device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
     '''
     Validate over one pass on the validation set
     '''

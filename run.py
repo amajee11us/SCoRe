@@ -51,10 +51,18 @@ def parse_args():
                         default='gc',
                         type=str,
                         help='Representation learning loss objective')
+    parser.add_argument('--sim_metric',
+                        default='rbf_kernel',
+                        type=str,
+                        help='Similarity metric for combinatorial representation learning loss objectives')
     parser.add_argument('--wandb',
                         default=False,
                         type = bool,
                         help = 'Boolean variable to indicate whether to use wandb for logging')
+    parser.add_argument('--gpu_num',
+                        default=0,
+                        type = int,
+                        help = 'GPU device number to use for training')
     args = parser.parse_args()
     return args
 
@@ -69,7 +77,7 @@ def main():
 
     log.info(pprint.PrettyPrinter(indent=4).pprint(cfg))
     # Select appropriate device
-    device = get_target_device(cfg)
+    device = get_target_device(cfg, args.gpu_num)
     log.info(f'Using {device} for execution.')
     '''
     Model/Optimizer setup
@@ -101,10 +109,15 @@ def main():
     # Define loss criterion
     criterion = torch.nn.CrossEntropyLoss().to(device)
     # Define the combinatorial objective
+    if args.wandb:
+        wandb.config.repr_loss = args.rep_loss
+        wandb.config.sim_metric = args.sim_metric
+        
+
     if args.rep_loss == 'gc':
-       gc = GraphCut(metric = 'cosSim', lamda = 0.9)
+       gc = GraphCut(metric = args.sim_metric, lamda = 0.9, device=device)
     elif args.rep_loss == 'supcon':
-        gc = SupervisedContrastiveLoss(cfg, temperature=0.1)
+        gc = SupervisedContrastiveLoss(cfg, temperature=0.1, device=device)
     else:
         gc = None
     #gc = None
@@ -134,10 +147,10 @@ def main():
 
         # train one epoch on the target device
         train(train_loader, model, criterion, optimizer, epoch, cfg, gc,
-              writer=tbwriter, wandb_var = args.wandb)
+              writer=tbwriter, wandb_var = args.wandb, device=device)
 
         # Get the top1 accuracy from the validation set
-        acc1 = validate(val_loader, model, criterion, epoch, cfg, gc, writer=tbwriter, wandb_var = args.wandb)
+        acc1 = validate(val_loader, model, criterion, epoch, cfg, gc, writer=tbwriter, wandb_var = args.wandb, , device=device)
 
         # step on the learning-rate
         lr_scheduler.step()

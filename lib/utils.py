@@ -89,7 +89,7 @@ def get_output_ckpt_dir(cfg):
     return out_dir
 
 
-def get_target_device(cfg):
+def get_target_device(cfg, gpu_num=0):
     '''
     Returns a device to dump all workings into.
     '''
@@ -101,6 +101,6 @@ def get_target_device(cfg):
             # fallback already initialized so no need to do it again
         else:
             # Here we have CUDA
-            device = torch.device("cuda")
+            device = torch.device("cuda:" + str(gpu_num))
 
     return device

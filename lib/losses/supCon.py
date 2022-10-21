@@ -5,7 +5,6 @@ from __future__ import print_function
 import torch
 import torch.nn as nn
 import logging
-from lib.utils import get_target_device
 
 '''
 Supervised Contrastive Loss: https://arxiv.org/pdf/2004.11362.pdf
@@ -15,12 +14,11 @@ class SupervisedContrastiveLoss(nn.Module):
     '''
     Adapted from : https://github.com/HobbitLong/SupContrast
     '''
-    def __init__(self, cfg, temperature=0.07, base_temperature=0.07):
+    def __init__(self, cfg, temperature=0.07, base_temperature=0.07, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
         super(SupervisedContrastiveLoss, self).__init__()
         self.temperature = temperature
         self.base_temperature = base_temperature
-
-        self.device = get_target_device(cfg)
+        self.device = device
 
     def forward(self, features, labels=None, mask=None):
         """
