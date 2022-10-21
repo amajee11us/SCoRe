@@ -139,7 +139,7 @@ def main():
     # Set the initial param for best accuracy to beat
     best_acc1 = 0
 
-    acc1 = validate(val_loader, model, criterion, -1, cfg, gc, writer=tbwriter, wandb_var=args.wandb)
+    acc1 = validate(val_loader, model, criterion, -1, cfg, gc, writer=tbwriter, wandb_var=args.wandb, device=device)
 
     # Train over the dataset
     for epoch in range(cfg.TRAIN.NUM_EPOCHS):
@@ -150,7 +150,7 @@ def main():
               writer=tbwriter, wandb_var = args.wandb, device=device)
 
         # Get the top1 accuracy from the validation set
-        acc1 = validate(val_loader, model, criterion, epoch, cfg, gc, writer=tbwriter, wandb_var = args.wandb, , device=device)
+        acc1 = validate(val_loader, model, criterion, epoch, cfg, gc, writer=tbwriter, wandb_var = args.wandb, device=device)
 
         # step on the learning-rate
         lr_scheduler.step()
