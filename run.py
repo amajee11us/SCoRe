@@ -1,3 +1,4 @@
+from SCoRe.lib.losses.facilityLocation import FacilityLocation
 import torch
 import logging
 from tensorboardX import SummaryWriter
@@ -113,7 +114,8 @@ def main():
         wandb.config.repr_loss = args.rep_loss
         wandb.config.sim_metric = args.sim_metric
         
-
+    if args.rep_loss == 'fl':
+       gc = FacilityLocation(metric = args.sim_metric, lamda = 0.6, device=device)
     if args.rep_loss == 'gc':
        gc = GraphCut(metric = args.sim_metric, lamda = 0.9, device=device)
     elif args.rep_loss == 'supcon':
