@@ -115,7 +115,7 @@ def main():
         wandb.config.sim_metric = args.sim_metric
         
     if args.rep_loss == 'fl':
-       gc = FacilityLocation(metric = args.sim_metric, lamda = 0.6, device=device)
+       gc = FacilityLocation(metric = args.sim_metric, lamda = 0.6, use_singleton=True, device=device)
     if args.rep_loss == 'gc':
        gc = GraphCut(metric = args.sim_metric, lamda = 0.9, device=device)
     elif args.rep_loss == 'supcon':
