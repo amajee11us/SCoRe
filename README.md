@@ -20,6 +20,21 @@ e. pyyaml - ``` conda install pyyaml ```
 
 f. numpy >= 1.18
 
+g. dotenv - ```conda install -c conda-forge python-dotenv```
+
+h. wandb - ```conda install -c conda-forge python-dotenv```
+
+Create the environment variables for accessing wandb.
+
+a. Create a ```.env``` file in the root directory
+
+b. Include the following details to access wandb APIs.
+```
+WANDB_API_KEY=<YOUR API KEY>
+WANDB_USER_NAME=<YOUR USER NAME>
+WANDB_PROJECT_NAME=SCoRe
+```
+
 For reproducing the results on a 64-bit Ubuntu machine with a RTX A6000 GPU an ```environment.yml``` file has been included for reference.
 
 ## Objective Functions (TBD)

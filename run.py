@@ -1,10 +1,10 @@
-from SCoRe.lib.losses.facilityLocation import FacilityLocation
 import torch
 import logging
 from tensorboardX import SummaryWriter
 from torchsummary import summary
 import wandb
 import os
+from dotenv import load_dotenv
 import argparse
 import pprint
 # import module classes
@@ -24,6 +24,7 @@ from lib.config.conf import __C as cfg
 # combinatorial optimization
 from lib.losses.graphCut import GraphCut
 from lib.losses.supCon import SupervisedContrastiveLoss
+from lib.losses.facilityLocation import FacilityLocation
 
 # define logger
 log = Logger(cfg)
@@ -69,6 +70,9 @@ def parse_args():
 
 
 def main():
+    # load environment variables from .env file
+    load_dotenv()
+    # load arguments from argparser
     args = parse_args()
     # Get configuration
     cfg_from_file(args.config_file)
@@ -91,9 +95,8 @@ def main():
     log.info("Using Seed : {}".format(seed))
 
     if args.wandb:
-        wandb_key = "bf3796e4dbd7c4ce41c9b39acba9a6644256c5d9"
-        os.environ["WANDB_API_KEY"] =  wandb_key
-        wandb.init(project="combinatorial_regularizers", config=cfg, entity="krishnatejakk", settings=wandb.Settings(code_dir="."))
+        wandb_key = os.getenv("WANDB_API_KEY")
+        wandb.init(project=os.getenv("WANDB_PROJECT_NAME"), config=cfg, entity=os.getenv("WANDB_USER_NAME"), settings=wandb.Settings(code_dir="."))
     
     # create model and load to device
     model = factory.build_model(cfg, args.gpu_num)
