@@ -44,21 +44,29 @@ class FacilityLocation(nn.Module):
         neg_set = torch.stack(neg_set)
         
         if self.sim_metric == 'rbf_kernel':
-          neg_dist_matrix = torch.cdist(pos_set, neg_set,2)**2
+          neg_dist_matrix = torch.cdist(neg_set, pos_set,2)**2
           neg_dist_matrix = torch.exp(-neg_dist_matrix/(2))
+          pos_dist_matrix = torch.cdist(pos_set, pos_set,2)**2
+          pos_dist_matrix = torch.exp(-pos_dist_matrix/(2))
+          pos_dist_matrix_wo_diag =  pos_dist_matrix.masked_select(~torch.eye(pos_dist_matrix.shape[0], dtype=bool).to(self.device)).view(pos_dist_matrix.shape[0], pos_dist_matrix.shape[0] - 1)
         elif self.sim_metric == 'euclidean':
-          neg_dist_matrix = -torch.cdist(pos_set, neg_set,2)          
+          neg_dist_matrix = -torch.cdist(neg_set, pos_set,2)  
+          pos_dist_matrix = -torch.cdist(pos_set, pos_set,2)        
+          pos_dist_matrix_wo_diag =  pos_dist_matrix.masked_select(~torch.eye(pos_dist_matrix.shape[0], dtype=bool).to(self.device)).view(pos_dist_matrix.shape[0], pos_dist_matrix.shape[0] - 1)
         elif self.sim_metric == 'cosSim':
           pos_set_norm = torch.norm(pos_set, p=2, dim=1).unsqueeze(1).expand_as(pos_set)
           pos_set_normalized = pos_set.div(pos_set_norm + 1e-5)
           neg_set_norm = torch.norm(neg_set, p=2, dim=1).unsqueeze(1).expand_as(neg_set)
           neg_set_normalized = neg_set.div(neg_set_norm + 1e-5)
-          neg_dist_matrix = torch.matmul(pos_set_normalized, neg_set_normalized.T)
+          neg_dist_matrix = torch.matmul(neg_set_normalized, pos_set_normalized.T)
+          pos_dist_matrix = torch.matmul(pos_set_normalized, pos_set_normalized.T)
+          pos_dist_matrix_wo_diag =  pos_dist_matrix.masked_select(~torch.eye(pos_dist_matrix.shape[0], dtype=bool).to(self.device)).view(pos_dist_matrix.shape[0], pos_dist_matrix.shape[0] - 1)
 
 
         #Normalized Information Correlation for negative sets
-        max_sim = torch.max(neg_dist_matrix)
+        max_sim = torch.max(neg_dist_matrix, dim=1).sum()
+        pos_sum = torch.sum(pos_dist_matrix_wo_diag)
         
-        loss += self.lamda * max_sim
+        loss += (max_sim - self.lamda * pos_sum)
 
       return loss
