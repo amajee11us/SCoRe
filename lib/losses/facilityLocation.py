@@ -65,6 +65,7 @@ class FacilityLocation(nn.Module):
 
         #Normalized Information Correlation for negative sets
         max_sim = torch.max(neg_dist_matrix, dim=1).sum()
+        #Singleton loss 
         pos_sum = torch.sum(pos_dist_matrix_wo_diag)
         
         loss += (max_sim - self.lamda * pos_sum)
