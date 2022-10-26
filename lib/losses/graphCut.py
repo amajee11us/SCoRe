@@ -14,7 +14,6 @@ class GraphCut(nn.Module):
         self.sim_metric = metric
         # determine the constant
         self.lamda = lamda
-        self.cos = nn.CosineSimilarity(dim=1, eps=1e-6)
         self.device = device
 
     def forward(self, X_set, Y_set):
@@ -73,19 +72,3 @@ class GraphCut(nn.Module):
         else:
             loss += (neg_sum - self.lamda * pos_sum)
       return loss
-
-        #if self.sim_metric == 'euclidean':
-        #  loss += pos_sum - self.lamda * neg_sum
-        #else:
-        
-    def __calculateSampleSeparation(self,x_i, x_j, exp = 2):
-
-      n = x_i.size(0)
-      m = x_j.size(0)
-      d = x_i.size(1)
-
-      x_i = x_i.unsqueeze(1).expand(n, m, d)
-      x_j = x_j.unsqueeze(0).expand(n, m, d)
-
-      dist = torch.pow(x_i - x_j, exp).sum(2) 
-      return dist 
