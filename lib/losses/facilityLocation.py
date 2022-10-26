@@ -8,13 +8,17 @@ import logging
 from lib.utils import get_target_device
 
 class FacilityLocation(nn.Module):
-    def __init__(self, metric='euclidean', lamda = 0.5, device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
+    def __init__(self, metric='euclidean', 
+                       lamda = 0.5, 
+                       use_singleton = False, 
+                       device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
         super(FacilityLocation, self).__init__()
         # determine the metric
         self.sim_metric = metric
         # determine the constant
         self.lamda = lamda
         self.device = device
+        self.use_singleton = use_singleton
 
     def forward(self, X_set, Y_set):
       '''
@@ -23,8 +27,8 @@ class FacilityLocation(nn.Module):
       
       1. select the X_set from class Y_set - positive class
       2. select all other X_set from Y_set not in step 1 - different classes
-      3. calculate the separation between positive classes in batch and maximize it (euc distance)
-      4. Calculate the separation between negative classes in  batch and minimize it (euc distance).
+      3. Calculate the separation between negative classes in  batch and minimize it (euc distance).
+      4. Additionally use a singleton set metric to minimize intra-class variance.
       '''
       unique_class_labels = torch.unique(Y_set)
       loss = 0
@@ -46,27 +50,42 @@ class FacilityLocation(nn.Module):
         if self.sim_metric == 'rbf_kernel':
           neg_dist_matrix = torch.cdist(neg_set, pos_set,2)**2
           neg_dist_matrix = torch.exp(-neg_dist_matrix/(2))
-          pos_dist_matrix = torch.cdist(pos_set, pos_set,2)**2
-          pos_dist_matrix = torch.exp(-pos_dist_matrix/(2))
-          pos_dist_matrix_wo_diag =  pos_dist_matrix.masked_select(~torch.eye(pos_dist_matrix.shape[0], dtype=bool).to(self.device)).view(pos_dist_matrix.shape[0], pos_dist_matrix.shape[0] - 1)
+          if self.use_singleton: # only required for singleton loss
+            pos_dist_matrix = torch.cdist(pos_set, pos_set,2)**2
+            pos_dist_matrix = torch.exp(-pos_dist_matrix/(2))
+            pos_dist_matrix_wo_diag =  pos_dist_matrix.masked_select(
+                                            ~torch.eye(pos_dist_matrix.shape[0], 
+                                                        dtype=bool).to(self.device)).view(
+                                                            pos_dist_matrix.shape[0], pos_dist_matrix.shape[0] - 1)
         elif self.sim_metric == 'euclidean':
           neg_dist_matrix = -torch.cdist(neg_set, pos_set,2)  
-          pos_dist_matrix = -torch.cdist(pos_set, pos_set,2)        
-          pos_dist_matrix_wo_diag =  pos_dist_matrix.masked_select(~torch.eye(pos_dist_matrix.shape[0], dtype=bool).to(self.device)).view(pos_dist_matrix.shape[0], pos_dist_matrix.shape[0] - 1)
+          if self.use_singleton:
+            pos_dist_matrix = -torch.cdist(pos_set, pos_set,2)        
+            pos_dist_matrix_wo_diag =  pos_dist_matrix.masked_select(
+                                            ~torch.eye(pos_dist_matrix.shape[0], 
+                                                        dtype=bool).to(self.device)).view(
+                                                            pos_dist_matrix.shape[0], pos_dist_matrix.shape[0] - 1)
         elif self.sim_metric == 'cosSim':
           pos_set_norm = torch.norm(pos_set, p=2, dim=1).unsqueeze(1).expand_as(pos_set)
           pos_set_normalized = pos_set.div(pos_set_norm + 1e-5)
           neg_set_norm = torch.norm(neg_set, p=2, dim=1).unsqueeze(1).expand_as(neg_set)
           neg_set_normalized = neg_set.div(neg_set_norm + 1e-5)
           neg_dist_matrix = torch.matmul(neg_set_normalized, pos_set_normalized.T)
-          pos_dist_matrix = torch.matmul(pos_set_normalized, pos_set_normalized.T)
-          pos_dist_matrix_wo_diag =  pos_dist_matrix.masked_select(~torch.eye(pos_dist_matrix.shape[0], dtype=bool).to(self.device)).view(pos_dist_matrix.shape[0], pos_dist_matrix.shape[0] - 1)
+          if self.use_singleton:
+            pos_dist_matrix = torch.matmul(pos_set_normalized, pos_set_normalized.T)
+            pos_dist_matrix_wo_diag =  pos_dist_matrix.masked_select(
+                                            ~torch.eye(pos_dist_matrix.shape[0], 
+                                                        dtype=bool).to(self.device)).view(
+                                                            pos_dist_matrix.shape[0], pos_dist_matrix.shape[0] - 1)
 
 
         #Normalized Information Correlation for negative sets
         max_sim = torch.max(neg_dist_matrix, dim=1).sum()
         #Singleton loss 
-        pos_sum = torch.sum(pos_dist_matrix_wo_diag)
+        if self.use_singleton:
+            pos_sum = torch.sum(pos_dist_matrix_wo_diag)
+        else:
+            pos_sum = torch.zeros(1) # just a zero tensor
         
         loss += (max_sim - self.lamda * pos_sum)
 

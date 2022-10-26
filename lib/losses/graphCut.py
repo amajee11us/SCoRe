@@ -8,7 +8,9 @@ import logging
 from lib.utils import get_target_device
 
 class GraphCut(nn.Module):
-    def __init__(self, metric='euclidean', lamda = 0.5, device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
+    def __init__(self, metric='euclidean', 
+                       lamda = 0.5, 
+                       device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
         super(GraphCut, self).__init__()
         # determine the metric
         self.sim_metric = metric
