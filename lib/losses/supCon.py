@@ -29,9 +29,14 @@ class SupervisedContrastiveLoss(nn.Module):
             A loss scalar.
         """
         # Check the domain of the features
-        if len(features.shape) < 3:
+        if len(features.shape) < 2:
             raise ValueError("Only applicable to features as SupCon Loss is applied to samples.")
-        if len(features.shape) > 3:
+        
+        elif len(features.shape) == 2:
+            #raise ValueError("Only applicable to features as SupCon Loss is applied to samples.")
+            features = torch.unsqueeze(features, dim=1)
+        
+        elif len(features.shape) > 3:
             features = features.view(features.shape[0], features.shape[1], -1)
 
         #print(features.shape)
