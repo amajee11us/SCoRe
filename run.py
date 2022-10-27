@@ -118,8 +118,8 @@ def main():
         wandb.config.sim_metric = args.sim_metric
         
     if args.rep_loss == 'fl':
-       gc = FacilityLocation(metric = args.sim_metric, lamda = 0.6, use_singleton=True, device=device)
-    if args.rep_loss == 'gc':
+       gc = FacilityLocation(metric = args.sim_metric, lamda = 0.9, use_singleton=False, device=device)
+    elif args.rep_loss == 'gc':
        gc = GraphCut(metric = args.sim_metric, lamda = 0.9, device=device)
     elif args.rep_loss == 'supcon':
         gc = SupervisedContrastiveLoss(cfg, temperature=0.1, device=device)
@@ -144,18 +144,18 @@ def main():
     # Set the initial param for best accuracy to beat
     best_acc1 = 0
 
-    acc1 = validate(val_loader, model, criterion, -1, cfg, gc, writer=tbwriter, wandb_var=args.wandb, device=device)
+    acc1 = validate(val_loader, model, criterion, -1, cfg, comb_optim=gc, writer=tbwriter, wandb_var=args.wandb, device=device)
 
     # Train over the dataset
     for epoch in range(cfg.TRAIN.NUM_EPOCHS):
         # adjust_learning_rate(optimizer, epoch, cfg)
 
         # train one epoch on the target device
-        train(train_loader, model, criterion, optimizer, epoch, cfg, gc,
+        train(train_loader, model, criterion, optimizer, epoch, cfg, comb_optim=gc,
               writer=tbwriter, wandb_var = args.wandb, device=device)
 
         # Get the top1 accuracy from the validation set
-        acc1 = validate(val_loader, model, criterion, epoch, cfg, gc, writer=tbwriter, wandb_var = args.wandb, device=device)
+        acc1 = validate(val_loader, model, criterion, epoch, cfg, comb_optim=gc, writer=tbwriter, wandb_var = args.wandb, device=device)
 
         # step on the learning-rate
         lr_scheduler.step()
