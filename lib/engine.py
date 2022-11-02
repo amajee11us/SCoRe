@@ -3,7 +3,7 @@ import time
 import logging
 import wandb
 from .meters import AverageMeter, ProgressMeter, accuracy, f1_loss
-from .utils import get_lr
+from .utils import get_lr, generate_tsne_from_feat_embedding, plot_tsne
 from lib.losses.graphCut import GraphCut
 
 
@@ -57,9 +57,8 @@ def train(train_loader, model, criterion, optimizer, epoch, cfg, comb_optim=None
         #gc = GraphCut(metric = 'cosSim', lamda = 0.5)
         if comb_optim is not None:
             loss_comb = comb_optim(features, label)
-            repr_loss = (1.0/ images.size(0)) * loss_comb.item()
-            #print(loss_comb)
-            loss += (1.0/ images.size(0)) * loss_comb
+            repr_loss = loss_comb.item() # (1.0/ images.size(0)) * loss_comb.item()
+            loss += loss_comb # 0.01 * for cossim
 
         #compute gradient and do Adam step
         optimizer.zero_grad()
@@ -127,6 +126,10 @@ def validate(val_loader, model, criterion, epoch, cfg, comb_optim, writer=None, 
     # switch to evaluate mode
     model.eval()
 
+    # Store feature and label embeddings for processing t-SNE plots
+    plot_features = []
+    plot_labels = []
+
     with torch.no_grad():
         end = time.time()
         clf_loss = 0
@@ -147,6 +150,10 @@ def validate(val_loader, model, criterion, epoch, cfg, comb_optim, writer=None, 
                 repr_loss = loss_comb.item()
                 #print(loss_comb)
                 loss += (1.0/images.size(0)) * loss_comb
+            
+            # update the features in the t-SNE lists
+            plot_features.append(features)
+            plot_labels.append(label)
 
             # measure accuracy and record loss
             acc1, acc5 = accuracy(output, label, topk=(1, 5))
@@ -182,6 +189,10 @@ def validate(val_loader, model, criterion, epoch, cfg, comb_optim, writer=None, 
             wandb.log(logger)
         logging.info(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f} F1 {f1_score.avg:.3f}'.format(
             top1=top1, top5=top5, f1_score=f1))
+        
+        # Plot the t-SNE
+        embeddings, labels = generate_tsne_from_feat_embedding(plot_features, plot_labels)
+        plot_tsne(embeddings, labels, 10, epoch+1)
 
     return top1.avg
 

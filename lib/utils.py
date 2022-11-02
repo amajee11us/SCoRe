@@ -8,6 +8,13 @@ import os
 import os.path as osp
 import logging
 
+#plot tools
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+# t-SNE packages
+from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
 
 def Logger(cfg):
     # clear all handlers
@@ -104,3 +111,51 @@ def get_target_device(cfg, gpu_num=0):
             device = torch.device("cuda:" + str(gpu_num))
 
     return device
+    
+'''
+Section to plot the t-SNE representation - Generated per epoch
+'''
+def generate_tsne_from_feat_embedding(featureList, labelList, select_indx):
+    # Check if the total no of features = no of labels found
+    assert len(featureList) == len(labelList)
+    assert len(featureList) > 0
+    feature = featureList[0]
+    label = labelList[0]
+    for i in range(1, len(labelList)):
+        feature = torch.cat([feature,featureList[i]],dim=0)
+        label = torch.cat([label, labelList[i]], dim=0)
+
+    feature = feature[select_indx,:]
+    label = label[select_indx]
+
+    # Move to CPU - TODO : Need to fix this going forward 
+    feature =feature.cpu().detach().numpy()
+    label = label.cpu().detach().numpy()
+    # Using PCA to reduce dimension to a reasonable dimension as recommended in
+    # https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html
+    feature = PCA(n_components=50).fit_transform(feature)
+    feature_embedded = TSNE(n_components=2).fit_transform(feature)
+    return feature_embedded, label
+
+def plot_tsne(features, labels, num_classes, epoch, prefix):
+    """Plot features on 2D plane.
+    Args:
+        features: (num_instances, num_features).
+        labels: (num_instances).
+    """
+    # TODO : Make it generic for all datasets
+    colors = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9']
+    for label_idx in range(num_classes):
+        plt.scatter(
+            features[labels == label_idx, 0],
+            features[labels == label_idx, 1],
+            c=colors[label_idx],
+            s=1,
+        )
+    plt.legend(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'], loc='upper right')
+    dirname = osp.join('output', prefix)
+    if not osp.exists(dirname):
+        os.mkdir(dirname)
+    save_name = osp.join(dirname, 'epoch_' + str(epoch) + '.png')
+    plt.savefig(save_name, bbox_inches='tight')
+    plt.close()
