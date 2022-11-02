@@ -111,11 +111,11 @@ def get_target_device(cfg, gpu_num=0):
             device = torch.device("cuda:" + str(gpu_num))
 
     return device
-    
+
 '''
 Section to plot the t-SNE representation - Generated per epoch
 '''
-def generate_tsne_from_feat_embedding(featureList, labelList, select_indx):
+def generate_tsne_from_feat_embedding(featureList, labelList):
     # Check if the total no of features = no of labels found
     assert len(featureList) == len(labelList)
     assert len(featureList) > 0
@@ -124,9 +124,6 @@ def generate_tsne_from_feat_embedding(featureList, labelList, select_indx):
     for i in range(1, len(labelList)):
         feature = torch.cat([feature,featureList[i]],dim=0)
         label = torch.cat([label, labelList[i]], dim=0)
-
-    feature = feature[select_indx,:]
-    label = label[select_indx]
 
     # Move to CPU - TODO : Need to fix this going forward 
     feature =feature.cpu().detach().numpy()

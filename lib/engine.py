@@ -192,7 +192,7 @@ def validate(val_loader, model, criterion, epoch, cfg, comb_optim, writer=None, 
         
         # Plot the t-SNE
         embeddings, labels = generate_tsne_from_feat_embedding(plot_features, plot_labels)
-        plot_tsne(embeddings, labels, 10, epoch+1)
+        plot_tsne(embeddings, labels, 10, epoch+1, cfg.EXP_NAME)
 
     return top1.avg
 
