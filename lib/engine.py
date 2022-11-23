@@ -50,15 +50,28 @@ def train(train_loader, model, criterion, optimizer, epoch, cfg, comb_optim=None
         label = torch.flatten(torch.stack(label)).to(device)
 
         features, output = model(images)
-        loss = criterion(output, label)
-        clf_loss = loss.item()
-        repr_loss = 0
-        # Add the combinatorial objective
-        #gc = GraphCut(metric = 'cosSim', lamda = 0.5)
-        if comb_optim is not None:
-            loss_comb = comb_optim(features, label)
-            repr_loss = loss_comb.item() # (1.0/ images.size(0)) * loss_comb.item()
-            loss += loss_comb # 0.01 * for cossim
+        # loss = criterion(output, label)
+        # clf_loss = loss.item()
+        # repr_loss = 0
+
+        # # Add Combinatorial regularizer in curriculum learning form
+        # if comb_optim is not None:
+        #     loss_comb = comb_optim(features, label)
+        #     loss += 0.1 * loss_comb #for cossim
+        #     # push the value to CPU for display
+        #     repr_loss = loss_comb.item()
+
+        clf_loss = repr_loss = 0 # init everything to Zero
+        # Implement curriculum learning
+        if epoch % 2 != 0 and comb_optim is not None:
+            loss = comb_optim(features, label)
+            clf_loss = 0 
+            repr_loss = loss.item()
+        else:
+            loss = criterion(output, label)
+            repr_loss = 0 
+            clf_loss = loss.item()  
+        
 
         #compute gradient and do Adam step
         optimizer.zero_grad()
@@ -143,13 +156,23 @@ def validate(val_loader, model, criterion, epoch, cfg, comb_optim, writer=None, 
             # compute output
             features, output = model(images)
             loss = criterion(output, label)
-            clf_loss += (loss.item() * images.size(0))
+            # clf_loss += (loss.item() * images.size(0))
             total_images += images.size(0)
-            if comb_optim is not None:
-                loss_comb = comb_optim(features, label)
-                repr_loss = loss_comb.item()
-                #print(loss_comb)
-                loss += (1.0/images.size(0)) * loss_comb
+            # if comb_optim is not None:
+            #     loss_comb = comb_optim(features, label)
+            #     repr_loss = loss_comb.item()
+            #     #print(loss_comb)
+            #     loss += (1.0/images.size(0)) * loss_comb
+
+            # Implement curriculum learning
+            if epoch % 2 != 0 and comb_optim is not None:
+                loss = comb_optim(features, label)
+                clf_loss += 0 
+                repr_loss += loss.item()
+            else:
+                loss = criterion(output, label)
+                repr_loss += 0 
+                clf_loss += (loss.item() * images.size(0))  
             
             # update the features in the t-SNE lists
             plot_features.append(features)
@@ -190,7 +213,8 @@ def validate(val_loader, model, criterion, epoch, cfg, comb_optim, writer=None, 
         logging.info(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f} F1 {f1_score.avg:.3f}'.format(
             top1=top1, top5=top5, f1_score=f1))
         
-        # Plot the t-SNE
+    # Plot the t-SNE
+    if epoch % 2 == 0:
         embeddings, labels = generate_tsne_from_feat_embedding(plot_features, plot_labels)
         plot_tsne(embeddings, labels, 10, epoch+1, cfg.EXP_NAME)
 
