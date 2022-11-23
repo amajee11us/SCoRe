@@ -58,9 +58,9 @@ class FacilityLocation(nn.Module):
                                                                 dtype=bool).to(self.device)).view(
                                                                     pos_dist_matrix.shape[0], pos_dist_matrix.shape[0] - 1)
             elif self.sim_metric == 'euclidean':
-                neg_dist_matrix = -torch.cdist(neg_set, pos_set,2)  
+                neg_dist_matrix = torch.cdist(neg_set, pos_set,2)  
                 if self.use_singleton:
-                    pos_dist_matrix = -torch.cdist(pos_set, pos_set,2)        
+                    pos_dist_matrix = torch.cdist(pos_set, pos_set,2)        
                     pos_dist_matrix_wo_diag =  pos_dist_matrix.masked_select(
                                                     ~torch.eye(pos_dist_matrix.shape[0], 
                                                                 dtype=bool).to(self.device)).view(
