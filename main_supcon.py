@@ -13,6 +13,7 @@ import torch
 import torch.backends.cudnn as cudnn
 from torchvision import transforms, datasets
 from dataloader.cubs2011 import CUBS
+from dataloader.imagenet import ImageNet
 
 from util import TwoCropTransform, AverageMeter
 from util import adjust_learning_rate, warmup_learning_rate
@@ -230,7 +231,7 @@ def set_loader(opt):
                                           transform=TwoCropTransform(train_transform),
                                           download=True)
     elif opt.dataset == 'imagenet':
-        train_dataset = datasets.ImageNet(root=opt.data_folder,
+        train_dataset = datasets.ImageNet(root=opt.data_folder, split='train',
                                           transform=TwoCropTransform(train_transform),
                                           download=True)
     elif opt.dataset == 'path':

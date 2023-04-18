@@ -61,7 +61,7 @@ def parse_option():
     # model dataset
     parser.add_argument('--model', type=str, default='resnet50')
     parser.add_argument('--dataset', type=str, default='cifar10',
-                        choices=['cifar10', 'cifar100', 'cubs'], help='dataset')
+                        choices=['cifar10', 'cifar100', 'cubs', 'imagenet'], help='dataset')
 
     # other setting
     parser.add_argument('--cosine', action='store_true',

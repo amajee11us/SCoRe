@@ -9,7 +9,7 @@ import os
 
 class ImageNet(Dataset):
     def __init__(self,
-                 data_path,
+                 root,
                  split,
                  transform=None,
                  num_classes=1000,
@@ -27,7 +27,7 @@ class ImageNet(Dataset):
         if not ("train" in self.split or "val" in self.split):
             raise Exception("Such split does not exist")
 
-        self.data_path = os.path.join(data_path, split)
+        self.data_path = os.path.join(root, split)
         if not os.path.exists(self.data_path):
             raise Exception("Data path: {} does not exist for split {}".format(
                 self.data_path, self.split))
