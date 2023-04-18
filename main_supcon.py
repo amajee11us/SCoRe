@@ -15,7 +15,7 @@ from torchvision import transforms, datasets
 from dataloader.cubs2011 import CUBS
 from dataloader.imagenet import ImageNet
 
-from util import TwoCropTransform, AverageMeter
+from util import TwoCropTransform, AverageMeter, scale_255
 from util import adjust_learning_rate, warmup_learning_rate
 from util import set_optimizer, save_model, load_model
 from networks.resnet_big import SupConResNet
@@ -199,8 +199,8 @@ def set_loader(opt):
         mean = (0.5071, 0.4867, 0.4408)
         std = (0.2675, 0.2565, 0.2761)
     elif opt.dataset == 'cubs':
-        mean = (0.485, 0.456, 0.406)
-        std = (0.229, 0.224, 0.225)
+        mean = (123., 117., 104.)
+        std = (1., 1., 1.)
     elif opt.dataset == 'imagenet':
         mean = (0.485, 0.456, 0.406)
         std = (0.229, 0.224, 0.225)
@@ -237,6 +237,18 @@ def set_loader(opt):
         train_dataset = datasets.ImageFolder(root=opt.data_folder,
                                             transform=TwoCropTransform(train_transform))
     elif opt.dataset == 'cubs':
+        train_transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.RandomResizedCrop(size=opt.size),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomApply([
+                transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
+            ], p=0.8),
+            transforms.RandomGrayscale(p=0.2),
+            transforms.ToTensor(),
+            scale_255(),
+            normalize
+        ])
         train_dataset = CUBS(root=opt.data_folder,
                                             transform=TwoCropTransform(train_transform))
     else:
@@ -374,6 +386,7 @@ def main():
     if opt.resume_from != '':
         model, optimizer, start_epoch = load_model(opt.resume_from, 
                                                    model, optimizer)
+        opt.total_train_steps = start_epoch * len(train_loader)
 
     # tensorboard
     logger = tb_logger.Logger(logdir=opt.tb_folder, flush_secs=2)
