@@ -231,9 +231,8 @@ def set_loader(opt):
                                           transform=TwoCropTransform(train_transform),
                                           download=True)
     elif opt.dataset == 'imagenet':
-        train_dataset = datasets.ImageNet(root=opt.data_folder, split='train',
-                                          transform=TwoCropTransform(train_transform),
-                                          download=True)
+        train_dataset = ImageNet(root=opt.data_folder, split='train',
+                                 transform=TwoCropTransform(train_transform))
     elif opt.dataset == 'path':
         train_dataset = datasets.ImageFolder(root=opt.data_folder,
                                             transform=TwoCropTransform(train_transform))

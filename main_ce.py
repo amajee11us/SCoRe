@@ -214,10 +214,10 @@ def set_loader(opt):
         val_dataset = CUBS(root=opt.data_folder, train = False,
                                             transform=val_transform_cubs)
     elif opt.dataset == 'imagenet':
-        train_dataset = datasets.ImageNet(root=opt.data_folder, split='train',
-                                          transform=train_transform_cubs)
-        val_dataset = datasets.ImageNet(root=opt.data_folder, split='val',
-                                          transform=val_transform_cubs)
+        train_dataset = ImageNet(root=opt.data_folder, split='train',
+                                 transform=train_transform_cubs)
+        val_dataset = ImageNet(root=opt.data_folder, split='val',
+                               transform=val_transform_cubs)
     else:
         raise ValueError(opt.dataset)
 
