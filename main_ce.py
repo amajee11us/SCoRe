@@ -13,7 +13,7 @@ from torchvision import transforms, datasets
 from dataloader.cubs2011 import CUBS
 from dataloader.imagenet import ImageNet
 
-from util import AverageMeter
+from util import AverageMeter, scale_255
 from util import adjust_learning_rate, warmup_learning_rate, accuracy
 from util import set_optimizer, save_model
 from networks.resnet_big import SupCEResNet
@@ -165,6 +165,9 @@ def set_loader(opt):
         mean = (0.5071, 0.4867, 0.4408)
         std = (0.2675, 0.2565, 0.2761)
     elif opt.dataset == 'cubs':
+        mean = (123., 117., 104.)
+        std = (1., 1., 1.)
+    elif opt.dataset == 'imagenet':
         mean = (0.485, 0.456, 0.406)
         std = (0.229, 0.224, 0.225)
     else:
@@ -178,20 +181,23 @@ def set_loader(opt):
         normalize,
     ])
     train_transform_cubs = transforms.Compose([
-        transforms.RandomResizedCrop(size=224, scale=(0.2, 1.)),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        normalize,
-    ])
+            transforms.Resize(256),
+            transforms.RandomResizedCrop(size=224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            scale_255(),
+            normalize
+        ])
 
     val_transform = transforms.Compose([
         transforms.ToTensor(),
         normalize,
     ])
     val_transform_cubs = transforms.Compose([
-        transforms.Resize(size=224),
+        transforms.Resize(size=(224,224)),
         transforms.ToTensor(),
-        normalize,
+        transforms.Normalize(mean=(0.485, 0.456, 0.406), 
+                             std=(0.229, 0.224, 0.225)),
     ])
 
     if opt.dataset == 'cifar10':
