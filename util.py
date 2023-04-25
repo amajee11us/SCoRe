@@ -199,6 +199,7 @@ def plot_tsne(features, labels, num_classes, epoch, prefix):
     plt.savefig(save_name, bbox_inches='tight')
     plt.close()
 
+
 class scale_255(object):
     def __call__(self, img):
         return img*255.

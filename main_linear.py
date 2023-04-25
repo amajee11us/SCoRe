@@ -107,6 +107,8 @@ def parse_option():
         opt.n_cls = 100
     elif opt.dataset == 'cubs':
         opt.n_cls = 200
+    elif opt.dataset == 'imagenet':
+        opt.n_cls = 1000
     else:
         raise ValueError('dataset not supported: {}'.format(opt.dataset))
     

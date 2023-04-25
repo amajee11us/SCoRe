@@ -19,7 +19,8 @@ from util import TwoCropTransform, AverageMeter, scale_255
 from util import adjust_learning_rate, warmup_learning_rate
 from util import set_optimizer, save_model, load_model
 from networks.resnet_big import SupConResNet
-from losses import SupConLoss, FacilityLocation, GraphCut, SupConLossV2
+# import the loss functions
+from objectives import *
 
 # Imbalanced dataset creation
 import numpy as np
@@ -71,7 +72,7 @@ def parse_option():
 
     # method
     parser.add_argument('--method', type=str, default='SupCon',
-                        choices=['SupCon', 'SupConV2', 'SupConV3', 'SimCLR', 'fl', 'gc', 'gc_rbf'], help='choose method')
+                        choices=['SupCon', 'SubmodSupCon', 'fl', 'gc', 'gc_rbf'], help='choose method')
 
     # temperature
     parser.add_argument('--temp', type=float, default=0.07,
@@ -273,10 +274,8 @@ def set_model(opt):
     model = SupConResNet(name=opt.model)
     if opt.method == 'SupCon':
         criterion = SupConLoss(temperature=opt.temp)
-    elif opt.method == 'SupConV2':
-        criterion = SupConLossV2(temperature=opt.temp)
-    elif opt.method == 'SupConV3':
-        criterion = SupConLossV2(temperature=opt.temp)
+    elif opt.method == 'SubmodSupCon':
+        criterion = SubmodSupCon(temperature=opt.temp)
     elif opt.method == 'fl':
         criterion = FacilityLocation(metric = 'cosSim', lamda = 1.0, use_singleton=False, temperature=opt.temp)
     elif opt.method == 'gc':
@@ -324,7 +323,7 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
         features = model(images)
         f1, f2 = torch.split(features, [bsz, bsz], dim=0)
         features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-        if opt.method == 'SupCon' or opt.method == 'SupConV2' or opt.method == 'SupConV3' or opt.method == 'fl' or opt.method == 'gc' or opt.method == 'gc_rbf':
+        if opt.method == 'SupCon' or opt.method == 'SubmodSupCon' or opt.method == 'fl' or opt.method == 'gc' or opt.method == 'gc_rbf':
             loss = criterion(features, labels)
         elif opt.method == 'SimCLR':
             loss = criterion(features)
