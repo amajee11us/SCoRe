@@ -277,7 +277,7 @@ def set_model(opt):
     elif opt.method == 'SubmodSupCon':
         criterion = SubmodSupCon(temperature=opt.temp)
     elif opt.method == 'TripletLoss':
-        criterion = TripletLoss(margin=0.5)
+        criterion = TripletLoss(margin=1.0)
     elif opt.method == 'fl':
         criterion = FacilityLocation(metric = 'cosSim', lamda = 1.0, use_singleton=False, temperature=opt.temp)
     elif opt.method == 'gc':
@@ -325,7 +325,9 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
         features = model(images)
         f1, f2 = torch.split(features, [bsz, bsz], dim=0)
         features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-        if opt.method == 'SupCon' or opt.method == 'TripletLoss' or opt.method == 'SubmodSupCon' or opt.method == 'fl' or opt.method == 'gc' or opt.method == 'gc_rbf':
+        if opt.method == 'SupCon' or opt.method == 'SubmodSupCon' \
+            or opt.method == 'TripletLoss' \
+            or opt.method == 'fl' or opt.method == 'gc' or opt.method == 'gc_rbf':
             loss = criterion(features, labels)
         elif opt.method == 'SimCLR':
             loss = criterion(features)

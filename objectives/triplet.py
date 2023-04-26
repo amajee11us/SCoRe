@@ -4,37 +4,45 @@ from __future__ import print_function
 
 import torch
 import torch.nn as nn
-import logging
-from torch.autograd import Variable
-
 
 class TripletLoss(nn.Module):
     def __init__(self, margin=0):
         super(TripletLoss, self).__init__()
         self.margin = margin
-        self.ranking_loss = nn.MarginRankingLoss(margin=margin)
+        self.temperature = 0.7
 
-    def forward(self, inputs, targets):
-        n = inputs.size(0)
-        # Compute pairwise distance, replace by the official when merged
-        dist = torch.pow(inputs, 2).sum(dim=1, keepdim=True).expand(n, n)
-        dist = dist + dist.t()
-        dist.addmm_(1, -2, inputs, inputs.t())
-        dist = dist.clamp(min=1e-12).sqrt()  # for numerical stability
-        # For each anchor, find the hardest positive and negative
-        mask = targets.expand(n, n).eq(targets.expand(n, n).t())
-        dist_ap, dist_an = [], []
-        for i in range(n):
-            dist_ap.append(dist[i][mask[i]].max())
-            dist_an.append(dist[i][mask[i] == 0].min())
-        dist_ap = torch.cat(dist_ap)
-        dist_an = torch.cat(dist_an)
-        # Compute ranking hinge loss
-        y = dist_an.data.new()
-        y.resize_as_(dist_an.data)
-        y.fill_(1)
-        y = Variable(y)
+    def forward(self, features, labels=None):
+        device = (torch.device('cuda')
+                  if features.is_cuda
+                  else torch.device('cpu'))
         
-        loss = self.ranking_loss(dist_an, dist_ap, y)
+        # Check the domain of the features
+        if len(features.shape) < 3:
+            raise ValueError("Only applicable to features as Triplet Loss is applied to samples.")
+        if len(features.shape) > 3:
+            features = features.view(features.shape[0], features.shape[1], -1)
         
+        n = features.shape[0]
+        tile = features.shape[1]
+
+        features = torch.cat(torch.unbind(features, dim=1), dim=0)
+        sim_mat = torch.div(
+                        torch.matmul(features, features.T), 
+                        self.temperature)
+        labels = labels.contiguous().view(-1, 1)
+        #labels = torch.cat((labels, labels))
+        pos_mask = torch.eq(labels, labels.T).float().to(device)
+        pos_mask = pos_mask.repeat(tile, tile)
+        neg_mask = 1.0 - pos_mask
+        pos_mask.fill_diagonal_(0)
+        neg_mask.fill_diagonal_(0)
+        
+        hardest_pos_per_anchor,_ = torch.max(pos_mask * sim_mat, dim=1)
+        hardest_neg_per_anchor,_ = torch.max(neg_mask * sim_mat, dim=1)
+
+        per_sample_loss = torch.relu(
+            hardest_pos_per_anchor - hardest_neg_per_anchor + self.margin)
+        
+        loss = per_sample_loss.mean()
+
         return loss
