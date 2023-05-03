@@ -39,6 +39,9 @@ def parse_option():
                         help='number of training epochs')
     parser.add_argument('--wandb', default=False, type = bool,
                         help = 'Boolean variable to indicate whether to use wandb for logging')
+    parser.add_argument('--comet', action='store_true',
+                        help="Boolean argument for comet logging")
+    
 
     # optimization
     parser.add_argument('--learning_rate', type=float, default=0.1,
@@ -61,7 +64,7 @@ def parse_option():
     # model dataset
     parser.add_argument('--model', type=str, default='resnet50')
     parser.add_argument('--dataset', type=str, default='cifar10',
-                        choices=['cifar10', 'cifar100', 'cubs', 'imagenet'], help='dataset')
+                        choices=['cifar10', 'cifar100', 'cubs', 'imagenet', 'imagenet32'], help='dataset')
 
     # other setting
     parser.add_argument('--cosine', action='store_true',
@@ -107,8 +110,9 @@ def parse_option():
         opt.n_cls = 100
     elif opt.dataset == 'cubs':
         opt.n_cls = 200
-    elif opt.dataset == 'imagenet':
+    elif opt.dataset in ['imagenet', 'imagenet32']:
         opt.n_cls = 1000
+    
     else:
         raise ValueError('dataset not supported: {}'.format(opt.dataset))
     
@@ -156,7 +160,7 @@ def set_model(opt):
     return model, classifier, criterion
 
 
-def train(train_loader, model, classifier, criterion, optimizer, epoch, opt):
+def train(train_loader, model, classifier, criterion, optimizer, epoch, opt, experiment=None):
     """one epoch training"""
     model.eval()
     classifier.train()
@@ -218,12 +222,23 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, opt):
 
             wandb.log(logger) 
 
-        opt.total_train_steps += 1    
+        if opt.comet:
+            logger = {'Train_steps': opt.total_train_steps,
+                    'Train_clf_loss': loss.item(),
+                    'Train_acc_1': acc1[0],
+                    'Train_acc_5': acc5[0],
+                    'Train_LR': optimizer.param_groups[0]['lr']
+                    }
+
+            experiment.log_metrics(logger, step=opt.total_train_steps)
+            
+        opt.total_train_steps += 1
+
 
     return losses.avg, top1.avg
 
 
-def validate(val_loader, model, classifier, criterion, opt, epoch):
+def validate(val_loader, model, classifier, criterion, opt, epoch, experiment=None):
     """validation"""
     model.eval()
     classifier.eval()
@@ -281,6 +296,11 @@ def validate(val_loader, model, classifier, criterion, opt, epoch):
                 }
 
         wandb.log(logger) 
+
+    if opt.comet:
+        experiment.log_metric("Val_steps", opt.total_val_steps, step=opt.total_val_steps)
+        experiment.log_metric("Val_clf_loss", losses.avg, step=opt.total_val_steps)
+        experiment.log_metric("Val_acc_1", top1.avg, step=opt.total_val_steps)
     
     opt.total_val_steps += 1
 
@@ -300,6 +320,17 @@ def main():
     if opt.wandb:
         wandb.watch(model)
 
+    if opt.comet:
+        from comet_ml import Experiment
+        # Create an experiment with your api key
+        experiment = Experiment(
+            api_key="r96agak8trPzpcPhI9chgJo7F",
+            project_name="score",
+            workspace="krishnatejakk",
+        )
+    else:
+        experiment = None
+
     # build optimizer
     optimizer = set_optimizer(opt, classifier)
 
@@ -310,13 +341,13 @@ def main():
         # train for one epoch
         time1 = time.time()
         loss, acc = train(train_loader, model, classifier, criterion,
-                          optimizer, epoch, opt)
+                          optimizer, epoch, opt, experiment=experiment)
         time2 = time.time()
         print('Train epoch {}, total time {:.2f}, accuracy:{:.2f}'.format(
             epoch, time2 - time1, acc))
 
         # eval for one epoch
-        loss, val_acc = validate(val_loader, model, classifier, criterion, opt, epoch)
+        loss, val_acc = validate(val_loader, model, classifier, criterion, opt, epoch, experiment=experiment)
         if val_acc > best_acc:
             best_acc = val_acc
 

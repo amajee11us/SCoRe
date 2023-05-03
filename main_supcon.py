@@ -5,16 +5,14 @@ import sys
 import argparse
 import time
 import math
-
 import wandb
-
 import tensorboard_logger as tb_logger
 import torch
 import torch.backends.cudnn as cudnn
 from torchvision import transforms, datasets
 from dataloader.cubs2011 import CUBS
 from dataloader.imagenet import ImageNet
-
+from dataloader.imagenet32 import ImageNetDownSample
 from util import TwoCropTransform, AverageMeter, scale_255
 from util import adjust_learning_rate, warmup_learning_rate
 from util import set_optimizer, save_model, load_model
@@ -42,7 +40,7 @@ def parse_option():
                         help='save frequency')
     parser.add_argument('--batch_size', type=int, default=256,
                         help='batch_size')
-    parser.add_argument('--num_workers', type=int, default=16,
+    parser.add_argument('--num_workers', type=int, default=4,
                         help='num of workers to use')
     parser.add_argument('--epochs', type=int, default=1000,
                         help='number of training epochs')
@@ -64,7 +62,7 @@ def parse_option():
     # model dataset
     parser.add_argument('--model', type=str, default='resnet50')
     parser.add_argument('--dataset', type=str, default='cifar10',
-                        choices=['cifar10', 'cifar100', 'path', 'cubs', 'imagenet'], help='dataset')
+                        choices=['cifar10', 'cifar100', 'path', 'cubs', 'imagenet', 'imagenet32'], help='dataset')
     parser.add_argument('--mean', type=str, help='mean of dataset in path in form of str tuple')
     parser.add_argument('--std', type=str, help='std of dataset in path in form of str tuple')
     parser.add_argument('--data_folder', type=str, default=None, help='path to custom dataset')
@@ -96,7 +94,8 @@ def parse_option():
 
     parser.add_argument('--resume_from', type=str, default='',
                         help='Checkpoint path to resume from.')
-
+    parser.add_argument('--comet', action='store_true',
+                        help="Boolean argument for comet logging")
     opt = parser.parse_args()
 
     # check if dataset is path that passed required arguments
@@ -107,7 +106,7 @@ def parse_option():
 
     # set the path according to the environment
     if opt.data_folder is None:
-        opt.data_folder = './datasets/'
+        opt.data_folder = '../data/'
     opt.model_path = './save/SupCon/{}_models'.format(opt.dataset)
     opt.tb_path = './save/SupCon/{}_tensorboard'.format(opt.dataset)
 
@@ -205,6 +204,9 @@ def set_loader(opt):
     elif opt.dataset == 'imagenet':
         mean = (0.485, 0.456, 0.406)
         std = (0.229, 0.224, 0.225)
+    elif opt.dataset == 'imagenet32':
+        mean = (0.485, 0.456, 0.406)
+        std = (0.229, 0.224, 0.225)
     elif opt.dataset == 'path':
         mean = eval(opt.mean)
         std = eval(opt.std)
@@ -234,6 +236,9 @@ def set_loader(opt):
     elif opt.dataset == 'imagenet':
         train_dataset = ImageNet(root=opt.data_folder, split='train',
                                  transform=TwoCropTransform(train_transform))
+    elif opt.dataset == 'imagenet32':
+        train_dataset = ImageNetDownSample(root=opt.data_folder, train=True,
+                                    transform=TwoCropTransform(train_transform))
     elif opt.dataset == 'path':
         train_dataset = datasets.ImageFolder(root=opt.data_folder,
                                             transform=TwoCropTransform(train_transform))
@@ -251,7 +256,7 @@ def set_loader(opt):
             normalize
         ])
         train_dataset = CUBS(root=opt.data_folder,
-                                            transform=TwoCropTransform(train_transform))
+                            transform=TwoCropTransform(train_transform))
     else:
         raise ValueError(opt.dataset)
 
@@ -259,7 +264,6 @@ def set_loader(opt):
         imbal_class_idx = create_class_imbal_indices(train_dataset, opt.imbalance_ratio)
         train_dataset.data = train_dataset.data[imbal_class_idx]
         train_dataset.targets = np.array(train_dataset.targets)[imbal_class_idx]
-
         assert len(train_dataset.targets) == len(train_dataset.data)
 
     train_sampler = None
@@ -289,6 +293,8 @@ def set_model(opt):
     # enable synchronized Batch Normalization
     if opt.syncBN:
         model = apex.parallel.convert_syncbn_model(model)
+        #model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model, process_group)
+
 
     if torch.cuda.is_available():
         if torch.cuda.device_count() > 1:
@@ -300,7 +306,7 @@ def set_model(opt):
     return model, criterion
 
 
-def train(train_loader, model, criterion, optimizer, epoch, opt):
+def train(train_loader, model, criterion, optimizer, epoch, opt, experiment=None):
     """one epoch training"""
     model.train()
 
@@ -365,6 +371,12 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
 
             wandb.log(logger)   
 
+        # Comet logger
+        if opt.comet:
+            experiment.log_metric('Train_steps', opt.total_train_steps, step=opt.total_train_steps)
+            experiment.log_metric('Train_repr_loss', loss, step=opt.total_train_steps)
+            experiment.log_metric('LR', optimizer.param_groups[0]['lr'], step=opt.total_train_steps)
+
         opt.total_train_steps += 1 
     return losses.avg
 
@@ -372,6 +384,18 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
 def main():
     opt = parse_option()
 
+      # COMET ML Logging
+    if opt.comet:
+        from comet_ml import Experiment
+        # Create an experiment with your api key
+        experiment = Experiment(
+            api_key="r96agak8trPzpcPhI9chgJo7F",
+            project_name="score",
+            workspace="krishnatejakk",
+        )
+    else:
+        experiment = None
+            
     # build data loader
     train_loader = set_loader(opt)
 
@@ -400,7 +424,7 @@ def main():
 
         # train for one epoch
         time1 = time.time()
-        loss = train(train_loader, model, criterion, optimizer, epoch, opt)
+        loss = train(train_loader, model, criterion, optimizer, epoch, opt, experiment=experiment)
         time2 = time.time()
         print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
 

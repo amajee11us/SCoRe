@@ -12,7 +12,7 @@ import torch.backends.cudnn as cudnn
 from torchvision import transforms, datasets
 from dataloader.cubs2011 import CUBS
 from dataloader.imagenet import ImageNet
-
+from dataloader.imagenet32 import ImageNetDownSample
 from util import AverageMeter, scale_255
 from util import adjust_learning_rate, warmup_learning_rate, accuracy
 from util import set_optimizer, save_model
@@ -58,7 +58,7 @@ def parse_option():
     # model dataset
     parser.add_argument('--model', type=str, default='resnet50')
     parser.add_argument('--dataset', type=str, default='cifar10',
-                        choices=['cifar10', 'cifar100', 'cubs', 'imagenet'], help='dataset')
+                        choices=['cifar10', 'cifar100', 'cubs', 'imagenet', 'imagenet32'], help='dataset')
 
     # class imbalance parameters
     parser.add_argument('--use_imbalanced', action='store_true',
@@ -126,7 +126,7 @@ def parse_option():
         opt.n_cls = 100
     elif opt.dataset == 'cubs':
         opt.n_cls = 200
-    elif opt.dataset == 'imagenet':
+    elif opt.dataset in ['imagenet', 'imagenet32']:
         opt.n_cls = 1000
     else:
         raise ValueError('dataset not supported: {}'.format(opt.dataset))
@@ -168,6 +168,9 @@ def set_loader(opt):
         mean = (123., 117., 104.)
         std = (1., 1., 1.)
     elif opt.dataset == 'imagenet':
+        mean = (0.485, 0.456, 0.406)
+        std = (0.229, 0.224, 0.225)
+    elif opt.dataset == 'imagenet32':
         mean = (0.485, 0.456, 0.406)
         std = (0.229, 0.224, 0.225)
     else:
@@ -224,6 +227,11 @@ def set_loader(opt):
                                  transform=train_transform_cubs)
         val_dataset = ImageNet(root=opt.data_folder, split='val',
                                transform=val_transform_cubs)
+    elif opt.dataset == 'imagenet32':
+        train_dataset = ImageNetDownSample(root=opt.data_folder, train=True,
+                                           transform=train_transform)
+        val_dataset = ImageNetDownSample(root=opt.data_folder, train=False,
+                                         transform=val_transform)
     else:
         raise ValueError(opt.dataset)
 
@@ -231,7 +239,6 @@ def set_loader(opt):
         imbal_class_idx = create_class_imbal_indices(train_dataset, opt.imbalance_ratio)
         train_dataset.data = train_dataset.data[imbal_class_idx]
         train_dataset.targets = np.array(train_dataset.targets)[imbal_class_idx]
-
         assert len(train_dataset.targets) == len(train_dataset.data)
 
     train_sampler = None
@@ -240,7 +247,7 @@ def set_loader(opt):
         num_workers=opt.num_workers, pin_memory=True, sampler=train_sampler)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=256, shuffle=False,
-        num_workers=8, pin_memory=True)
+        num_workers=opt.num_workers, pin_memory=True)
 
     return train_loader, val_loader
 
