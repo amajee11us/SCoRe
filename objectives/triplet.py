@@ -38,7 +38,7 @@ class TripletLoss(nn.Module):
         neg_mask.fill_diagonal_(0)
         
         hardest_pos_per_anchor,_ = torch.max(pos_mask * sim_mat, dim=1)
-        hardest_neg_per_anchor,_ = torch.max(neg_mask * sim_mat, dim=1)
+        hardest_neg_per_anchor,_ = torch.min(neg_mask * sim_mat, dim=1)
 
         per_sample_loss = torch.relu(
             hardest_pos_per_anchor - hardest_neg_per_anchor + self.margin)
