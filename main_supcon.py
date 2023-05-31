@@ -5,14 +5,16 @@ import sys
 import argparse
 import time
 import math
+
 import wandb
+
 import tensorboard_logger as tb_logger
 import torch
 import torch.backends.cudnn as cudnn
 from torchvision import transforms, datasets
 from dataloader.cubs2011 import CUBS
 from dataloader.imagenet import ImageNet
-from dataloader.imagenet32 import ImageNetDownSample
+
 from util import TwoCropTransform, AverageMeter, scale_255
 from util import adjust_learning_rate, warmup_learning_rate
 from util import set_optimizer, save_model, load_model
@@ -40,7 +42,7 @@ def parse_option():
                         help='save frequency')
     parser.add_argument('--batch_size', type=int, default=256,
                         help='batch_size')
-    parser.add_argument('--num_workers', type=int, default=4,
+    parser.add_argument('--num_workers', type=int, default=16,
                         help='num of workers to use')
     parser.add_argument('--epochs', type=int, default=1000,
                         help='number of training epochs')
@@ -62,7 +64,7 @@ def parse_option():
     # model dataset
     parser.add_argument('--model', type=str, default='resnet50')
     parser.add_argument('--dataset', type=str, default='cifar10',
-                        choices=['cifar10', 'cifar100', 'path', 'cubs', 'imagenet', 'imagenet32'], help='dataset')
+                        choices=['cifar10', 'cifar100', 'path', 'cubs', 'imagenet'], help='dataset')
     parser.add_argument('--mean', type=str, help='mean of dataset in path in form of str tuple')
     parser.add_argument('--std', type=str, help='std of dataset in path in form of str tuple')
     parser.add_argument('--data_folder', type=str, default=None, help='path to custom dataset')
@@ -70,7 +72,7 @@ def parse_option():
 
     # method
     parser.add_argument('--method', type=str, default='SupCon',
-                        choices=['SupCon', 'SubmodSupCon', 'fl', 'gc', 'gc_rbf'], help='choose method')
+                        choices=['TripletLoss', 'SubmodTriplet', 'SupCon', 'SubmodSupCon', 'LiftedStructureLoss', 'opl', 'fl', 'gc', 'gc_rbf', 'LogDet'], help='choose method')
 
     # temperature
     parser.add_argument('--temp', type=float, default=0.07,
@@ -85,6 +87,8 @@ def parse_option():
     # other setting
     parser.add_argument('--cosine', action='store_true',
                         help='using cosine annealing')
+    parser.add_argument('--constant', action='store_true',
+                        help='using fixed LR')
     parser.add_argument('--syncBN', action='store_true',
                         help='using synchronized batch normalization')
     parser.add_argument('--warm', action='store_true',
@@ -94,8 +98,7 @@ def parse_option():
 
     parser.add_argument('--resume_from', type=str, default='',
                         help='Checkpoint path to resume from.')
-    parser.add_argument('--comet', action='store_true',
-                        help="Boolean argument for comet logging")
+
     opt = parser.parse_args()
 
     # check if dataset is path that passed required arguments
@@ -106,7 +109,7 @@ def parse_option():
 
     # set the path according to the environment
     if opt.data_folder is None:
-        opt.data_folder = '../data/'
+        opt.data_folder = './datasets/'
     opt.model_path = './save/SupCon/{}_models'.format(opt.dataset)
     opt.tb_path = './save/SupCon/{}_tensorboard'.format(opt.dataset)
 
@@ -204,9 +207,6 @@ def set_loader(opt):
     elif opt.dataset == 'imagenet':
         mean = (0.485, 0.456, 0.406)
         std = (0.229, 0.224, 0.225)
-    elif opt.dataset == 'imagenet32':
-        mean = (0.485, 0.456, 0.406)
-        std = (0.229, 0.224, 0.225)
     elif opt.dataset == 'path':
         mean = eval(opt.mean)
         std = eval(opt.std)
@@ -225,23 +225,22 @@ def set_loader(opt):
         normalize,
     ])
 
+    train_transform = TwoCropTransform(train_transform)
+    
     if opt.dataset == 'cifar10':
         train_dataset = datasets.CIFAR10(root=opt.data_folder,
-                                         transform=TwoCropTransform(train_transform),
+                                         transform=train_transform,
                                          download=True)
     elif opt.dataset == 'cifar100':
         train_dataset = datasets.CIFAR100(root=opt.data_folder,
-                                          transform=TwoCropTransform(train_transform),
+                                          transform=train_transform,
                                           download=True)
     elif opt.dataset == 'imagenet':
         train_dataset = ImageNet(root=opt.data_folder, split='train',
-                                 transform=TwoCropTransform(train_transform))
-    elif opt.dataset == 'imagenet32':
-        train_dataset = ImageNetDownSample(root=opt.data_folder, train=True,
-                                    transform=TwoCropTransform(train_transform))
+                                 transform=train_transform)
     elif opt.dataset == 'path':
         train_dataset = datasets.ImageFolder(root=opt.data_folder,
-                                            transform=TwoCropTransform(train_transform))
+                                            transform=train_transform)
     elif opt.dataset == 'cubs':
         train_transform = transforms.Compose([
             transforms.Resize(256),
@@ -256,7 +255,7 @@ def set_loader(opt):
             normalize
         ])
         train_dataset = CUBS(root=opt.data_folder,
-                            transform=TwoCropTransform(train_transform))
+                                            transform=TwoCropTransform(train_transform))
     else:
         raise ValueError(opt.dataset)
 
@@ -264,6 +263,7 @@ def set_loader(opt):
         imbal_class_idx = create_class_imbal_indices(train_dataset, opt.imbalance_ratio)
         train_dataset.data = train_dataset.data[imbal_class_idx]
         train_dataset.targets = np.array(train_dataset.targets)[imbal_class_idx]
+
         assert len(train_dataset.targets) == len(train_dataset.data)
 
     train_sampler = None
@@ -281,20 +281,22 @@ def set_model(opt):
     elif opt.method == 'SubmodSupCon':
         criterion = SubmodSupCon(temperature=opt.temp)
     elif opt.method == 'TripletLoss':
-        criterion = TripletLoss(margin=1.0)
+        criterion = TripletLoss(margin=0.5)
+    elif opt.method == 'SubmodTriplet':
+        criterion = SubmodTriplet(temperature=opt.temp)
     elif opt.method == 'fl':
         criterion = FacilityLocation(metric = 'cosSim', lamda = 1.0, use_singleton=False, temperature=opt.temp)
     elif opt.method == 'gc':
-        criterion = GraphCut(metric = 'cosSim', lamda = 1.0, temperature=opt.temp)
+        criterion = GraphCut(metric = 'cosSim', lamda = 1.0, temperature=opt.temp, is_cf=True)
     elif opt.method == 'gc_rbf':
         criterion = GraphCut(metric = 'rbf_kernel', lamda = 1.0, temperature=opt.temp)
+    # elif opt.method == 'LogDet':
+    #     criterion = LogDet(metric = 'cosSim', temperature=opt.temp)
     else:
         criterion = torch.nn.CrossEntropyLoss()
     # enable synchronized Batch Normalization
     if opt.syncBN:
         model = apex.parallel.convert_syncbn_model(model)
-        #model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model, process_group)
-
 
     if torch.cuda.is_available():
         if torch.cuda.device_count() > 1:
@@ -306,7 +308,7 @@ def set_model(opt):
     return model, criterion
 
 
-def train(train_loader, model, criterion, optimizer, epoch, opt, experiment=None):
+def train(train_loader, model, criterion, optimizer, epoch, opt):
     """one epoch training"""
     model.train()
 
@@ -315,6 +317,7 @@ def train(train_loader, model, criterion, optimizer, epoch, opt, experiment=None
     losses = AverageMeter()
 
     end = time.time()
+    running_loss = 0.0
     for idx, (images, labels) in enumerate(train_loader):
         data_time.update(time.time() - end)
 
@@ -331,12 +334,12 @@ def train(train_loader, model, criterion, optimizer, epoch, opt, experiment=None
         features = model(images)
         f1, f2 = torch.split(features, [bsz, bsz], dim=0)
         features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-        if opt.method == 'SupCon' or opt.method == 'SubmodSupCon' \
-            or opt.method == 'TripletLoss' \
-            or opt.method == 'fl' or opt.method == 'gc' or opt.method == 'gc_rbf':
+        
+        if opt.method in ['SupCon', 'SubmodSupCon', 'TripletLoss', 'SubmodTriplet', 'opl', 'fl', 'gc', 'gc_rbf', 'LogDet']:
             loss = criterion(features, labels)
-        elif opt.method == 'SimCLR':
-            loss = criterion(features)
+        elif opt.method in ['LiftedStructureLoss']:
+            #labels = torch.cat((labels,labels)) # TODO : Fix this later
+            loss = criterion(features, labels)
         else:
             raise ValueError('contrastive method not supported: {}'.
                              format(opt.method))
@@ -358,7 +361,7 @@ def train(train_loader, model, criterion, optimizer, epoch, opt, experiment=None
             print('Train: [{0}][{1}/{2}]\t'
                   'BT {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'DT {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                  'loss {loss.val:.3f} ({loss.avg:.3f})'.format(
+                  'loss {loss.val:.5f} ({loss.avg:.3f})'.format(
                    epoch, idx + 1, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses))
             sys.stdout.flush()
@@ -371,12 +374,6 @@ def train(train_loader, model, criterion, optimizer, epoch, opt, experiment=None
 
             wandb.log(logger)   
 
-        # Comet logger
-        if opt.comet:
-            experiment.log_metric('Train_steps', opt.total_train_steps, step=opt.total_train_steps)
-            experiment.log_metric('Train_repr_loss', loss, step=opt.total_train_steps)
-            experiment.log_metric('LR', optimizer.param_groups[0]['lr'], step=opt.total_train_steps)
-
         opt.total_train_steps += 1 
     return losses.avg
 
@@ -384,18 +381,6 @@ def train(train_loader, model, criterion, optimizer, epoch, opt, experiment=None
 def main():
     opt = parse_option()
 
-      # COMET ML Logging
-    if opt.comet:
-        from comet_ml import Experiment
-        # Create an experiment with your api key
-        experiment = Experiment(
-            api_key="r96agak8trPzpcPhI9chgJo7F",
-            project_name="score",
-            workspace="krishnatejakk",
-        )
-    else:
-        experiment = None
-            
     # build data loader
     train_loader = set_loader(opt)
 
@@ -424,9 +409,9 @@ def main():
 
         # train for one epoch
         time1 = time.time()
-        loss = train(train_loader, model, criterion, optimizer, epoch, opt, experiment=experiment)
+        loss = train(train_loader, model, criterion, optimizer, epoch, opt)
         time2 = time.time()
-        print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
+        print('epoch {}, loss {:.5f}, total time {:.2f}'.format(epoch, loss, time2 - time1))
 
         # tensorboard logger
         logger.log_value('loss', loss, epoch)

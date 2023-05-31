@@ -10,6 +10,7 @@ class GraphCut(nn.Module):
                        lamda = 0.5, 
                        epsilon = 10.0,
                        temperature=0.7,
+                       is_cf=False,
                        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")):
         super(GraphCut, self).__init__()
         # determine the metric
@@ -18,52 +19,33 @@ class GraphCut(nn.Module):
         self.lamda = lamda
         self.epsilon = epsilon
         self.device = device
-
+        self.is_cf = is_cf
         self.temperature = temperature
         self.contrast_mode = 'all'
         self.base_temperature = 0.07
 
-    def forward(self, features, labels=None, mask=None):
+    def forward(self, features, labels=None):
         device = (torch.device('cuda')
                   if features.is_cuda
                   else torch.device('cpu'))
 
-        if len(features.shape) < 3:
-            raise ValueError('`features` needs to be [bsz, n_views, ...],'
-                             'at least 3 dimensions are required')
-        if len(features.shape) > 3:
-            features = features.view(features.shape[0], features.shape[1], -1)
-
         batch_size = features.shape[0]
-        if labels is not None and mask is not None:
-            raise ValueError('Cannot define both `labels` and `mask`')
-        elif labels is None and mask is None:
-            mask = torch.eye(batch_size, dtype=torch.float32).to(device)
-        elif labels is not None:
-            labels = labels.contiguous().view(-1, 1)
-            if labels.shape[0] != batch_size:
-                raise ValueError('Num of labels does not match num of features')
-            mask = torch.eq(labels, labels.T).float().to(device)
-        else:
-            mask = mask.float().to(device)
-
+        labels = labels.contiguous().view(-1, 1)
+        if labels.shape[0] != batch_size:
+            raise ValueError('Num of labels does not match num of features')
+        mask = torch.eq(labels, labels.T).float().to(device)
         # for the supervised case create a new negative mask
         mask_neg = 1.0 - mask
         
         contrast_count = features.shape[1]
-        contrast_feature = torch.cat(torch.unbind(features, dim=1), dim=0)
-        if self.contrast_mode == 'one':
-            anchor_feature = features[:, 0]
-            anchor_count = 1
-        elif self.contrast_mode == 'all':
-            anchor_feature = contrast_feature
-            anchor_count = contrast_count
-        else:
-            raise ValueError('Unknown mode: {}'.format(self.contrast_mode))
-
+        contrast_feature = torch.cat(torch.unbind(features, dim=1), dim=0)        
+        anchor_feature = contrast_feature
+        anchor_count = contrast_count
+        
         if self.sim_metric == 'rbf_kernel':
-            anchor_dot_contrast = torch.cdist(anchor_feature, contrast_feature,2)**2
-            anchor_dot_contrast = 1 - anchor_dot_contrast
+            anchor_feature = anchor_feature[:, None, :] # shape (N, D) -> (N, 1, D)
+            contrast_feature = contrast_feature[None, :, :] # shape (N, D) -> (1, N, D)
+            anchor_dot_contrast = torch.sum((anchor_feature - contrast_feature)**2, 2)
             anchor_dot_contrast = torch.exp(-anchor_dot_contrast/(0.1*anchor_dot_contrast.mean()))
         elif self.sim_metric == 'cosSim':
             anchor_dot_contrast = torch.matmul(anchor_feature, contrast_feature.T)
@@ -94,10 +76,16 @@ class GraphCut(nn.Module):
         
         # # V3
         log_prob = torch.log(exp_logits.sum(1, keepdim=True))
-        # Min the similarity between negative set
-        log_prob = torch.log(
-            (self.lamda * (exp_logits * mask)).sum(1) / (exp_logits * mask_neg).sum(1)
-        )
+        if self.is_cf:
+            log_prob = torch.div(
+                -self.lamda * (exp_logits * mask_neg).sum(1),
+                mask.sum(1)
+            )
+        else:
+            # Min the similarity between negative set
+            log_prob = torch.log(
+                (self.lamda * (exp_logits * mask)).sum(1) / (exp_logits * mask_neg).sum(1)
+            )
 
         loss = - (self.temperature / self.base_temperature) * log_prob
         
