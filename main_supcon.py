@@ -224,7 +224,6 @@ def set_loader(opt):
         transforms.ToTensor(),
         normalize,
     ])
-
     train_transform = TwoCropTransform(train_transform)
     
     if opt.dataset == 'cifar10':
