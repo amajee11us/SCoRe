@@ -2,5 +2,12 @@ from .supcon import SupConLoss
 from .supcon_var import SubmodSupCon
 from .facility_location import FacilityLocation
 from .graph_cut import GraphCut
-from .triplet_var import SubmodTriplet
 from .triplet import TripletLoss
+from .triplet_var import SubmodTriplet
+from .liftedstructure import LiftedStructureLoss
+from .opl import OrthogonalProjectionLoss
+from .logdet import LogDet
+from .snn import SNNLoss
+from .npairs import NPairsLoss
+from .snn_var import SubmodSNN
+from .multiSimilarity import MSLoss

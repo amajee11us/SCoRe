@@ -18,6 +18,10 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import MinMaxScaler
 
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+
+
 class TwoCropTransform:
     """Create two crops of the same image"""
     def __init__(self, transform):
@@ -87,6 +91,8 @@ def adjust_learning_rate(args, optimizer, epoch):
         eta_min = lr * (args.lr_decay_rate ** 3)
         lr = eta_min + (lr - eta_min) * (
                 1 + math.cos(math.pi * epoch / args.epochs)) / 2
+    elif args.constant:
+        lr = lr # no change
     else:
         steps = np.sum(epoch > np.asarray(args.lr_decay_epochs))
         if steps > 0:
@@ -111,6 +117,9 @@ def set_optimizer(opt, model):
                           lr=opt.learning_rate,
                           momentum=opt.momentum,
                           weight_decay=opt.weight_decay)
+    # optimizer = torch.optim.Adam(model.parameters(), 
+    #                              lr=opt.learning_rate,
+    #                              weight_decay=opt.weight_decay)
     return optimizer
 
 
@@ -134,9 +143,32 @@ def load_model(ckpt_path, model, optimizer):
     
     return model, optimizer, epoch
 
+def list_of_ints(arg):
+    return list(map(int, arg.split(',')))
+    
 '''
-Section to plot the t-SNE representation - Generated per epoch
+Section to plot the t-SNE and Confusion Matrix representation - Generated per epoch
 '''
+def plot_confusion_matrix(y_true, y_pred, save_path=None):
+    """
+    Plots the confusion matrix.
+    
+    Parameters:
+        y_true (array): Ground truth labels.
+        y_pred (array): Predicted labels.
+        save_path (str): Path to save the confusion matrix plot. If None, the plot is not saved.
+    """
+    # Compute the confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+       
+    if save_path:
+        #plt.savefig(save_path)
+        with open(save_path, 'wb') as fd:
+            np.save(fd, np.array(cm))
+        print(f"Confusion matrix saved at {save_path}")
+    else:
+        plt.show()
+
 def generate_tsne_from_feat_embedding(featureList, labelList, num_samples = 1000, use_all=True):
     # Check if the total no of features = no of labels found
     assert len(featureList) == len(labelList)

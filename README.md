@@ -1,9 +1,8 @@
 # SCoRe - Submodular Combinatorial Representation Learning 
 This repository aims to create a benchmark for submodular combinatorial loss functions for representation learning tasks. 
-We benchmark widely adopted objective functions like contrastive loss, triplet loss, margin penalties etc. for image classification tasks against
-submodular functions (added as regularizers). 
+We benchmark widely adopted objective functions like contrastive loss, triplet loss, margin penalties etc. for image classification tasks against submodular combinatorial loss functions (added as regularizers). 
 
-The aim of this experiment is to show that submodular functions lead to the formation of well-formed feature clusters with distinct decision boundaries for highly imbalanced real world datasets.
+The aim of this project is to show that submodular functions lead to the formation of well-formed feature clusters with distinct decision boundaries for highly imbalanced real world datasets.
 
 ## Installation
 The following packages are required to be installed before running training and evaluation operations.
@@ -24,6 +23,8 @@ g. dotenv - ```conda install -c conda-forge python-dotenv```
 
 h. wandb - ```conda install -c conda-forge python-dotenv```
 
+i. pytorch_metric_learning - ```conda install -c conda-forge pytorch-metric-learning```
+
 Create the environment variables for accessing wandb.
 
 a. Create a ```.env``` file in the root directory
@@ -35,34 +36,76 @@ WANDB_USER_NAME=<YOUR USER NAME>
 WANDB_PROJECT_NAME=SCoRe
 ```
 
-For reproducing the results on a 64-bit Ubuntu machine with a RTX A6000 GPU an ```environment.yml``` file has been included for reference.
+For reproducing the results on a 64-bit Ubuntu machine with 2 RTX A6000 GPU an ```environment.yml``` file has been included for reference.
 
-## Objective Functions (TBD)
-### Triplet Loss
+## Usage
 
-### Supervised Contrastive Loss
+You might use `CUDA_VISIBLE_DEVICES` to set proper number of GPUs, and/or switch to MedMNIST by `--dataset <dermamnist/organamnist>`.
 
-### Cosine Similarity Objective
-
-### Orthogonal Projection Loss
-
-## Training Instructions
-Run the below command to train a model using SCoRe.
+**(1) Training on Cross-Entropy Loss**
 ```
-python run.py --config_file configs/cifar_10_32x32.yaml
+python trainval_ce.py --batch_size 512 \
+  --learning_rate 0.8 \
+  --cosine --dataset <choice of dataset> 
 ```
-The evaluation of the model on the validation dataset will occur at the end of every epoch.
-
-## Evaluation Instructions
-TBD
-
-## Results
-The results for each experiment is tabulated below.
-
-| Algorithm             | Config File | Loss Function |F1-score | Acc @ top1 | Acc @ top5 |
-|---                    |:---:        |:---:          |:---:    |:---:       |:---:       |
-|AlexNet_CIFAR-10_32x32 (baseline)| [link](configs/cifar_10_32x32.yaml)  | CE |         |71.17       |97.0        |
-|AlexNet_CIFAR-10_32x32 | [link]()  | CE + CosSim         |       |        |
-
-## References
-TBD
+**(2) Two Stage Learning Strategy in SCoRe**  
+Stage 1: Training the feature extractor ResNet-50.
+```
+python train_stage1.py --batch_size 512 \
+  <OTHER OPTIONS> \
+  --method <choice of objective function> \
+  --dataset <choice of dataset> 
+```
+Stage 2 : Training and evaluating the Linear model.
+```
+python trainval_stage2.py --batch_size 512 \
+  --method <choice of objective function> \
+  --dataset <choice of dataset> \
+  --ckpt /path/to/model.pth \
+  <OTHER OPTIONS>
+```
+Available choice of options common to stage 1 and stage 2 model training :
+```
+--print_freq PRINT_FREQ
+                        print frequency
+  --save_freq SAVE_FREQ
+                        save frequency
+  --batch_size BATCH_SIZE
+                        batch_size
+  --num_workers NUM_WORKERS
+                        num of workers to use
+  --epochs EPOCHS       number of training epochs
+  --wandb WANDB         Boolean variable to indicate whether to use wandb for logging
+  --learning_rate LEARNING_RATE
+                        learning rate
+  --lr_decay_epochs LR_DECAY_EPOCHS
+                        where to decay lr, can be a list
+  --lr_decay_rate LR_DECAY_RATE
+                        decay rate for learning rate
+  --weight_decay WEIGHT_DECAY
+                        weight decay
+  --momentum MOMENTUM   momentum
+  --model MODEL
+  --dataset {cifar10,cifar100,path,cubs,imagenet,imagenet32,organamnist,dermamnist,bloodmnist}
+                        dataset
+  --mean MEAN           mean of dataset in path in form of str tuple
+  --std STD             std of dataset in path in form of str tuple
+  --data_folder DATA_FOLDER
+                        path to custom dataset
+  --size SIZE           parameter for RandomResizedCrop
+  --method {SupCon,SubmodSupCon,TripletLoss,SubmodTriplet,LiftedStructureLoss,NPairsLoss,MSLoss,SNNLoss,SubmodSNN,fl,gc,LogDet}
+                        choose method
+  --temp TEMP           temperature for loss function
+  --use_imbalanced      using Class Imbalanced dataset
+  --imbalance_ratio IMBALANCE_RATIO
+                        Imbalance ratio for imbalanced data sampling
+  --imbalance_classes IMBALANCE_CLASSES
+                        List of class IDs in the range of [0, max_no_of_classes]
+  --cosine              using cosine annealing
+  --constant            using fixed LR
+  --syncBN              using synchronized batch normalization
+  --warm                warm-up for large batch training
+  --trial TRIAL         id for recording multiple runs
+  --resume_from RESUME_FROM
+                        Checkpoint path to resume from.
+```

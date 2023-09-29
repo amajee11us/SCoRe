@@ -6,15 +6,20 @@ import argparse
 import time
 import math
 import wandb
+import numpy as np
+
+# MedMNIST dataset
+import medmnist
+from medmnist import INFO # INFO allows us to fetch the details of dataset based on search flag
 
 import torch
 import torch.backends.cudnn as cudnn
 
-from main_ce import set_loader
+from trainval_ce import set_loader
 from util import AverageMeter
-from util import adjust_learning_rate, warmup_learning_rate, accuracy, f1_loss
+from util import adjust_learning_rate, warmup_learning_rate, accuracy, f1_loss, list_of_ints
 from util import set_optimizer
-from util import plot_tsne, generate_tsne_from_feat_embedding
+from util import plot_tsne, generate_tsne_from_feat_embedding, plot_confusion_matrix
 from networks.resnet_big import SupConResNet, LinearClassifier
 
 try:
@@ -39,9 +44,6 @@ def parse_option():
                         help='number of training epochs')
     parser.add_argument('--wandb', default=False, type = bool,
                         help = 'Boolean variable to indicate whether to use wandb for logging')
-    parser.add_argument('--comet', action='store_true',
-                        help="Boolean argument for comet logging")
-    
 
     # optimization
     parser.add_argument('--learning_rate', type=float, default=0.1,
@@ -60,15 +62,27 @@ def parse_option():
                         help='using Class Imbalanced dataset')
     parser.add_argument('--imbalance_ratio', type=int, default=10,
                         help='Imbalance ratio for imbalanced data sampling')
+    parser.add_argument('--imbalance_classes', type=list_of_ints, default=None,
+                        help='List of class IDs in the range of [0, max_no_of_classes]')
     
     # model dataset
     parser.add_argument('--model', type=str, default='resnet50')
     parser.add_argument('--dataset', type=str, default='cifar10',
-                        choices=['cifar10', 'cifar100', 'cubs', 'imagenet', 'imagenet32'], help='dataset')
+                        choices=['cifar10', 'cifar100', 
+                                 'cubs', 'imagenet', 
+                                 'organamnist', 'dermamnist', 'bloodmnist'], help='dataset')
 
     # other setting
+    parser.add_argument('--method', type=str, default='SupCon',
+                        choices=['SupCon', 'SubmodSupCon', 
+                                 'TripletLoss', 'SubmodTriplet', 
+                                 'LiftedStructureLoss', 'NPairsLoss', 
+                                 'MSLoss', 'SNNLoss', 'SubmodSNN',
+                                 'fl', 'gc', 'gc_rbf', 'LogDet'], help='choose method')
     parser.add_argument('--cosine', action='store_true',
                         help='using cosine annealing')
+    parser.add_argument('--constant', action='store_true',
+                        help='using fixed LR')
     parser.add_argument('--warm', action='store_true',
                         help='warm-up for large batch training')
 
@@ -79,14 +93,15 @@ def parse_option():
 
     # set the path according to the environment
     opt.data_folder = './datasets/'
+    opt.model_path = './save/SupCon/{}_models'.format(opt.dataset)
 
     iterations = opt.lr_decay_epochs.split(',')
     opt.lr_decay_epochs = list([])
     for it in iterations:
         opt.lr_decay_epochs.append(int(it))
 
-    opt.model_name = '{}_{}_lr_{}_decay_{}_bsz_{}'.\
-        format(opt.dataset, opt.model, opt.learning_rate, opt.weight_decay,
+    opt.model_name = '{}_{}_{}_lr_{}_decay_{}_bsz_{}'.\
+        format(opt.method, opt.dataset, opt.model, opt.learning_rate, opt.weight_decay,
                opt.batch_size)
 
     if opt.cosine:
@@ -103,16 +118,25 @@ def parse_option():
                     1 + math.cos(math.pi * opt.warm_epochs / opt.epochs)) / 2
         else:
             opt.warmup_to = opt.learning_rate
+    
+    opt.save_folder = os.path.join(opt.model_path, opt.model_name)
+    if not os.path.isdir(opt.save_folder):
+        os.makedirs(opt.save_folder)
 
     if opt.dataset == 'cifar10':
         opt.n_cls = 10
+    elif opt.dataset == 'organamnist':
+        opt.n_cls = 11
+    elif opt.dataset == 'dermamnist':
+        opt.n_cls = 7
+    elif opt.dataset == 'bloodmnist':
+        opt.n_cls = 8
     elif opt.dataset == 'cifar100':
         opt.n_cls = 100
     elif opt.dataset == 'cubs':
         opt.n_cls = 200
-    elif opt.dataset in ['imagenet', 'imagenet32']:
+    elif opt.dataset == 'imagenet':
         opt.n_cls = 1000
-    
     else:
         raise ValueError('dataset not supported: {}'.format(opt.dataset))
     
@@ -160,7 +184,7 @@ def set_model(opt):
     return model, classifier, criterion
 
 
-def train(train_loader, model, classifier, criterion, optimizer, epoch, opt, experiment=None):
+def train(train_loader, model, classifier, criterion, optimizer, epoch, opt):
     """one epoch training"""
     model.eval()
     classifier.train()
@@ -185,6 +209,7 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, opt, exp
         with torch.no_grad():
             features = model.encoder(images)
         output = classifier(features.detach())
+        labels = labels.view(-1)
         loss = criterion(output, labels)
 
         # update metric
@@ -222,23 +247,12 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, opt, exp
 
             wandb.log(logger) 
 
-        if opt.comet:
-            logger = {'Train_steps': opt.total_train_steps,
-                    'Train_clf_loss': loss.item(),
-                    'Train_acc_1': acc1[0],
-                    'Train_acc_5': acc5[0],
-                    'Train_LR': optimizer.param_groups[0]['lr']
-                    }
-
-            experiment.log_metrics(logger, step=opt.total_train_steps)
-            
-        opt.total_train_steps += 1
-
+        opt.total_train_steps += 1    
 
     return losses.avg, top1.avg
 
 
-def validate(val_loader, model, classifier, criterion, opt, epoch, experiment=None):
+def validate(val_loader, model, classifier, criterion, opt, epoch):
     """validation"""
     model.eval()
     classifier.eval()
@@ -246,6 +260,7 @@ def validate(val_loader, model, classifier, criterion, opt, epoch, experiment=No
     # Store feature and label embeddings for processing t-SNE plots
     plot_features = []
     plot_labels = []
+    plot_predictions = []
 
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -261,11 +276,12 @@ def validate(val_loader, model, classifier, criterion, opt, epoch, experiment=No
             # forward
             feat = model.encoder(images)
             output = classifier(feat)
+            labels = labels.view(-1)
             loss = criterion(output, labels)
 
-            # update the features in the t-SNE lists
-            plot_features.append(feat)
-            plot_labels.append(labels)
+            plot_labels.append(labels.cpu().numpy())
+            _, pred_labels = torch.max(output, 1)
+            plot_predictions.append(pred_labels.cpu().numpy())
 
             # update metric
             losses.update(loss.item(), bsz)
@@ -284,10 +300,10 @@ def validate(val_loader, model, classifier, criterion, opt, epoch, experiment=No
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
                       'Acc@1 {top1.val:.3f} ({top1.avg:.3f})'.format(
                        idx, len(val_loader), batch_time=batch_time,
-                       loss=losses, top1=top1))
-
-    embeddings, labels = generate_tsne_from_feat_embedding(plot_features, plot_labels)
-    plot_tsne(embeddings, labels, 10, epoch+1, "stage2_"+opt.model_name)       
+                       loss=losses, top1=top1))     
+    # Convert plot_labels and plot_predictions to NumPy arrays
+    plot_labels_np = np.concatenate(plot_labels)
+    plot_predictions_np = np.concatenate(plot_predictions) 
     
     if opt.wandb:
         logger = {'Val_steps': opt.total_val_steps,
@@ -296,11 +312,6 @@ def validate(val_loader, model, classifier, criterion, opt, epoch, experiment=No
                 }
 
         wandb.log(logger) 
-
-    if opt.comet:
-        experiment.log_metric("Val_steps", opt.total_val_steps, step=opt.total_val_steps)
-        experiment.log_metric("Val_clf_loss", losses.avg, step=opt.total_val_steps)
-        experiment.log_metric("Val_acc_1", top1.avg, step=opt.total_val_steps)
     
     opt.total_val_steps += 1
 
@@ -320,17 +331,6 @@ def main():
     if opt.wandb:
         wandb.watch(model)
 
-    if opt.comet:
-        from comet_ml import Experiment
-        # Create an experiment with your api key
-        experiment = Experiment(
-            api_key="r96agak8trPzpcPhI9chgJo7F",
-            project_name="score",
-            workspace="krishnatejakk",
-        )
-    else:
-        experiment = None
-
     # build optimizer
     optimizer = set_optimizer(opt, classifier)
 
@@ -341,13 +341,13 @@ def main():
         # train for one epoch
         time1 = time.time()
         loss, acc = train(train_loader, model, classifier, criterion,
-                          optimizer, epoch, opt, experiment=experiment)
+                          optimizer, epoch, opt)
         time2 = time.time()
         print('Train epoch {}, total time {:.2f}, accuracy:{:.2f}'.format(
             epoch, time2 - time1, acc))
 
         # eval for one epoch
-        loss, val_acc = validate(val_loader, model, classifier, criterion, opt, epoch, experiment=experiment)
+        loss, val_acc = validate(val_loader, model, classifier, criterion, opt, epoch)
         if val_acc > best_acc:
             best_acc = val_acc
 

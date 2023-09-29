@@ -7,9 +7,6 @@ import torch.nn as nn
 import logging
 
 class SubmodTriplet(nn.Module):
-    '''
-    Adapted from : https://github.com/HobbitLong/SupContrast
-    '''
     def __init__(self, temperature=0.07, base_temperature=0.07):
         super(SubmodTriplet, self).__init__()
         self.temperature = temperature
@@ -50,12 +47,12 @@ class SubmodTriplet(nn.Module):
 
         # compute Similarity Kernel /Matrix
         anchor_dot_contrast = torch.div(
-            torch.matmul(anchor_feature, contrast_feature.T),
+            torch.matmul(anchor_feature, contrast_feature.T)**2,
             self.temperature)
         # for numerical stability - borrowed from SupCon paper
         max_sim_per_anchor, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
         sim_kernel = anchor_dot_contrast - max_sim_per_anchor.detach()
-        sim_kernel = sim_kernel**2
+        sim_kernel = sim_kernel 
 
         # create the positive and the negative masks
         mask_pos = mask_pos.repeat(anchor_count, contrast_count)
@@ -65,13 +62,13 @@ class SubmodTriplet(nn.Module):
 
         # Compute the loss
         # compute the second term - sum_pos(log sum_neg(exp(S)))
-        loss = sim_kernel * mask_neg - sim_kernel * mask_pos
+        loss = (sim_kernel * mask_neg).sum(1) - (sim_kernel * mask_pos).sum(1)
         
         # compute mean of log-likelihood over the entire set
-        mean_loss = loss.sum(1) / loss.shape[0]
+        mean_loss = loss #/ loss.shape[0]
         
         # loss
-        loss = (self.temperature / self.base_temperature) * mean_loss
+        loss = - (self.temperature / self.base_temperature) * mean_loss
         loss = loss.view(anchor_count, batch_size).mean()
 
         return loss

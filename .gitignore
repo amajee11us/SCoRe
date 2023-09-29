@@ -3,4 +3,5 @@ data/*
 output/*
 wandb/*
 __pycache__/
+datasets/*
 .env

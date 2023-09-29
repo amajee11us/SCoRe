@@ -15,7 +15,7 @@ from torchvision import transforms, datasets
 from dataloader.cubs2011 import CUBS
 from dataloader.imagenet import ImageNet
 
-from util import TwoCropTransform, AverageMeter, scale_255
+from util import TwoCropTransform, AverageMeter, scale_255, list_of_ints
 from util import adjust_learning_rate, warmup_learning_rate
 from util import set_optimizer, save_model, load_model
 from networks.resnet_big import SupConResNet
@@ -25,6 +25,10 @@ from objectives import *
 # Imbalanced dataset creation
 import numpy as np
 import random
+
+# MedMNIST dataset
+import medmnist
+from medmnist import INFO 
 
 try:
     import apex
@@ -64,7 +68,11 @@ def parse_option():
     # model dataset
     parser.add_argument('--model', type=str, default='resnet50')
     parser.add_argument('--dataset', type=str, default='cifar10',
-                        choices=['cifar10', 'cifar100', 'path', 'cubs', 'imagenet'], help='dataset')
+                        choices=['cifar10', 'cifar100', 
+                                 'path', 
+                                 'cubs', 
+                                 'imagenet', 'imagenet32', 
+                                 'organamnist', 'dermamnist', 'bloodmnist'], help='dataset')
     parser.add_argument('--mean', type=str, help='mean of dataset in path in form of str tuple')
     parser.add_argument('--std', type=str, help='std of dataset in path in form of str tuple')
     parser.add_argument('--data_folder', type=str, default=None, help='path to custom dataset')
@@ -72,7 +80,11 @@ def parse_option():
 
     # method
     parser.add_argument('--method', type=str, default='SupCon',
-                        choices=['TripletLoss', 'SubmodTriplet', 'SupCon', 'SubmodSupCon', 'LiftedStructureLoss', 'opl', 'fl', 'gc', 'gc_rbf', 'LogDet'], help='choose method')
+                        choices=['SupCon', 'SubmodSupCon', 
+                                 'TripletLoss', 'SubmodTriplet', 
+                                 'LiftedStructureLoss', 'NPairsLoss', 
+                                 'MSLoss', 'SNNLoss', 'SubmodSNN',
+                                 'fl', 'gc', 'gc_rbf', 'LogDet'], help='choose method')
 
     # temperature
     parser.add_argument('--temp', type=float, default=0.07,
@@ -83,6 +95,8 @@ def parse_option():
                         help='using Class Imbalanced dataset')
     parser.add_argument('--imbalance_ratio', type=int, default=10,
                         help='Imbalance ratio for imbalanced data sampling')
+    parser.add_argument('--imbalance_classes', type=list_of_ints, default=None,
+                        help='List of class IDs in the range of [0, max_no_of_classes]')
 
     # other setting
     parser.add_argument('--cosine', action='store_true',
@@ -126,7 +140,10 @@ def parse_option():
         opt.model_name = '{}_cosine'.format(opt.model_name)
     
     if opt.use_imbalanced:
-        opt.model_name = '{}_imbalanced_{}_ratio'.format(opt.model_name, opt.imbalance_ratio)
+        if opt.imbalance_classes is not None:
+            opt.model_name = '{}_imbalanced_step_{}_ratio'.format(opt.model_name, opt.imbalance_ratio)
+        else:
+            opt.model_name = '{}_imbalanced_{}_ratio'.format(opt.model_name, opt.imbalance_ratio)
 
     # warm-up for large-batch training,
     if opt.batch_size > 256:
@@ -169,15 +186,23 @@ def parse_option():
     return opt
 
 
-def create_class_imbal_indices(dataset, imbalance_ratio):
+def create_class_imbal_indices(dataset, imbalance_ratio, class_set_idx=None):
     # Get all training targets and count the number of class instances
     targets = np.array(dataset.targets)
     classes, class_counts = np.unique(targets, return_counts=True)
     nb_classes = len(classes)
     
     # compute the imbalanced class counts
-    mu = np.power(1 / imbalance_ratio, 1 / (nb_classes - 1))
-    imbal_class_counts = [int(max(class_counts) * np.power(mu, i)) for i in range(nb_classes)]
+    # chose between step function or longtail
+    if class_set_idx is None:
+        # longtail dist
+        mu = np.power(1 / imbalance_ratio, 1 / (nb_classes - 1))
+        imbal_class_counts = [int(max(class_counts) * np.power(mu, i)) for i in range(nb_classes)]
+    else:
+        # Step function
+        imbal_class_counts = np.ones(nb_classes, dtype=int) * int(max(class_counts))
+        for i in class_set_idx:
+            imbal_class_counts[i] = int(imbal_class_counts[i] * (1 / imbalance_ratio))
     imbal_class_counts = list(imbal_class_counts)
     print(imbal_class_counts)
 
@@ -198,6 +223,10 @@ def set_loader(opt):
     if opt.dataset == 'cifar10':
         mean = (0.4914, 0.4822, 0.4465)
         std = (0.2023, 0.1994, 0.2010)
+    elif opt.dataset[-5:] == 'mnist': # this is a single channel dataset
+        opt.data_folder = os.path.join(opt.data_folder, "medmnist")
+        mean = (0.5)
+        std = (0.5)
     elif opt.dataset == 'cifar100':
         mean = (0.5071, 0.4867, 0.4408)
         std = (0.2675, 0.2565, 0.2761)
@@ -224,12 +253,23 @@ def set_loader(opt):
         transforms.ToTensor(),
         normalize,
     ])
+
     train_transform = TwoCropTransform(train_transform)
     
     if opt.dataset == 'cifar10':
         train_dataset = datasets.CIFAR10(root=opt.data_folder,
                                          transform=train_transform,
                                          download=True)
+    elif opt.dataset[-5:] == 'mnist':
+        info = INFO[opt.dataset]
+        print(info)
+        DataClass = getattr(medmnist, info['python_class'])
+
+        train_dataset = DataClass(root=opt.data_folder,
+                                split="train",
+                                transform=train_transform,
+                                as_rgb=True,
+                                download=False)
     elif opt.dataset == 'cifar100':
         train_dataset = datasets.CIFAR100(root=opt.data_folder,
                                           transform=train_transform,
@@ -259,7 +299,9 @@ def set_loader(opt):
         raise ValueError(opt.dataset)
 
     if opt.use_imbalanced:
-        imbal_class_idx = create_class_imbal_indices(train_dataset, opt.imbalance_ratio)
+        imbal_class_idx = create_class_imbal_indices(train_dataset, 
+                                                     opt.imbalance_ratio, 
+                                                     opt.imbalance_classes)
         train_dataset.data = train_dataset.data[imbal_class_idx]
         train_dataset.targets = np.array(train_dataset.targets)[imbal_class_idx]
 
@@ -280,17 +322,30 @@ def set_model(opt):
     elif opt.method == 'SubmodSupCon':
         criterion = SubmodSupCon(temperature=opt.temp)
     elif opt.method == 'TripletLoss':
-        criterion = TripletLoss(margin=0.5)
+        criterion = TripletLoss(margin=0.05)
     elif opt.method == 'SubmodTriplet':
         criterion = SubmodTriplet(temperature=opt.temp)
+    elif opt.method == 'NPairsLoss':
+        criterion = NPairsLoss(margin=1e-2, temperature=opt.temp)
+    elif opt.method == 'LiftedStructureLoss':
+        criterion = LiftedStructureLoss(margin=0.1, alpha=1, beta=0)
+    elif opt.method == 'MSLoss':
+        criterion = MSLoss(alpha=2, beta=50, margin=0.5)
+    elif opt.method == 'SNNLoss':
+        criterion = SNNLoss(temperature=opt.temp, factor=100)
+    elif opt.method == 'SubmodSNN':
+        criterion = SubmodSNN(temperature=opt.temp)
     elif opt.method == 'fl':
-        criterion = FacilityLocation(metric = 'cosSim', lamda = 1.0, use_singleton=False, temperature=opt.temp)
+        criterion = FacilityLocation(metric = 'cosSim', lamda = 1.0, 
+                                     use_singleton=False, temperature=opt.temp)
     elif opt.method == 'gc':
-        criterion = GraphCut(metric = 'cosSim', lamda = 1.0, temperature=opt.temp, is_cf=True)
+        #criterion = GraphCut(metric = 'cosSim', lamda = 1.0, temperature=opt.temp)
+        criterion = GraphCut(metric = 'cosSim', lamda = 1.0, 
+                             temperature=opt.temp, is_cf=False)
     elif opt.method == 'gc_rbf':
         criterion = GraphCut(metric = 'rbf_kernel', lamda = 1.0, temperature=opt.temp)
-    # elif opt.method == 'LogDet':
-    #     criterion = LogDet(metric = 'cosSim', temperature=opt.temp)
+    elif opt.method == 'LogDet':
+        criterion = LogDet(metric = 'cosSim', temperature=opt.temp)
     else:
         criterion = torch.nn.CrossEntropyLoss()
     # enable synchronized Batch Normalization
@@ -307,7 +362,7 @@ def set_model(opt):
     return model, criterion
 
 
-def train(train_loader, model, criterion, optimizer, epoch, opt):
+def train(opt, train_loader, model, criterion, optimizer, epoch):
     """one epoch training"""
     model.train()
 
@@ -334,7 +389,11 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
         f1, f2 = torch.split(features, [bsz, bsz], dim=0)
         features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
         
-        if opt.method in ['SupCon', 'SubmodSupCon', 'TripletLoss', 'SubmodTriplet', 'opl', 'fl', 'gc', 'gc_rbf', 'LogDet']:
+        if opt.method in ['SupCon', 'SubmodSupCon', 
+                          'TripletLoss', 'SubmodTriplet', 
+                          'NPairsLoss', 'MSLoss', 'LiftedStructureLoss',
+                          'SNNLoss', 'SubmodSNN',
+                          'fl', 'gc', 'gc_rbf', 'LogDet']:
             loss = criterion(features, labels)
         elif opt.method in ['LiftedStructureLoss']:
             #labels = torch.cat((labels,labels)) # TODO : Fix this later
@@ -408,7 +467,7 @@ def main():
 
         # train for one epoch
         time1 = time.time()
-        loss = train(train_loader, model, criterion, optimizer, epoch, opt)
+        loss = train(opt, train_loader, model, criterion, optimizer, epoch)
         time2 = time.time()
         print('epoch {}, loss {:.5f}, total time {:.2f}'.format(epoch, loss, time2 - time1))
 
