@@ -2,7 +2,7 @@
 This repository aims to create a benchmark for submodular combinatorial loss functions for representation learning tasks. 
 We benchmark widely adopted objective functions like contrastive loss, triplet loss, margin penalties etc. for image classification tasks against submodular combinatorial loss functions (added as regularizers). 
 
-The aim of this project is to show that submodular functions lead to the formation of well-formed feature clusters with distinct decision boundaries for highly imbalanced real world datasets.
+Our paper introduces a novel family of objective functions based on set-based submodular information measures. The paradigm shift in machine learning to adopt set-based information functions as learning objectives and exploiting their combinatorial properties to overcome inter-class bias and intra-class variance is the key motivation of SCoRe.
 
 ## Installation
 The following packages are required to be installed before running training and evaluation operations.
@@ -121,11 +121,9 @@ Available choice of options common to stage 1 and stage 2 model training :
 | SNN                                          | 83.65                 | 75.97                 | 83.85               | 71.87                                 |
 | Multi-Similarity Loss                        | 82.40                 | 76.72                 | 85.50               | 71.02                                 |
 | SupCon                                       | 89.96                 | 78.10                 | 87.35               | 72.12                                 |
-|----------------------------------------------|-----------------------|-----------------------|---------------------|---------------------------------------|
 | Submod-Triplet (ours)                        | 89.20                 | 74.36                 | 86.03               | 72.35                                 |
 | Submod-SNN (ours)                            | 89.28                 | 78.76                 | 86.21               | 71.77                                 |
 | Submod-SupCon (ours)                         | 90.81                 | 81.31                 | 87.48               | 72.51                                 |
-|----------------------------------------------|-----------------------|-----------------------|---------------------|---------------------------------------|
 | Graph-Cut [$S_{f}$] (ours)                   | 89.20                 | 76.89                 | 86.28               | 69.10                                 |
 | Graph-Cut [$C_{f}$] (ours)                   | 90.83                 | 87.37                 | **87.57**           | 72.82                                 |
 | LogDet [$C_{f}$] (ours)                      | 90.80                 | 87.00                 | 87.00               | 72.04                                 |
@@ -135,7 +133,7 @@ Available choice of options common to stage 1 and stage 2 model training :
 ## Citation
 Please feel free to cite our work when using this repo.
 ```
-@inproceedings{majee2023score,
+@inproceedings{score,
   title = {SCoRe: Submodular Combinatorial Representation Learning for Real-World Class-Imbalanced Settings},
   author = {Anonymous Authors},
   booktitle = {Under Review},
