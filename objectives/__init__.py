@@ -13,4 +13,8 @@ from .contrastive.snn import SNNLoss
 from .contrastive.npairs import NPairsLoss
 from .contrastive.multiSimilarity import MSLoss
 
+# PaCo losses, has to be used with the MoCo encoder
+from .combinatorial.PaCoFL import PaCoFLLoss
+from .combinatorial.PaCoGC import PaCoGCLoss
+
 from .utils import *
