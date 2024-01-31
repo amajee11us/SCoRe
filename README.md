@@ -121,9 +121,11 @@ Available choice of options common to stage 1 and stage 2 model training :
 | SNN                                          | 83.65                 | 75.97                 | 83.85               | 71.87                                 |
 | Multi-Similarity Loss                        | 82.40                 | 76.72                 | 85.50               | 71.02                                 |
 | SupCon                                       | 89.96                 | 78.10                 | 87.35               | 72.12                                 |
+|----------------------------------------------|-----------------------|-----------------------|---------------------|---------------------------------------|
 | Submod-Triplet (ours)                        | 89.20                 | 74.36                 | 86.03               | 72.35                                 |
 | Submod-SNN (ours)                            | 89.28                 | 78.76                 | 86.21               | 71.77                                 |
 | Submod-SupCon (ours)                         | 90.81                 | 81.31                 | 87.48               | 72.51                                 |
+|----------------------------------------------|-----------------------|-----------------------|---------------------|---------------------------------------|
 | Graph-Cut [$S_{f}$] (ours)                   | 89.20                 | 76.89                 | 86.28               | 69.10                                 |
 | Graph-Cut [$C_{f}$] (ours)                   | 90.83                 | 87.37                 | **87.57**           | 72.82                                 |
 | LogDet [$C_{f}$] (ours)                      | 90.80                 | 87.00                 | 87.00               | 72.04                                 |
@@ -135,8 +137,8 @@ Please feel free to cite our work when using this repo.
 ```
 @inproceedings{majee2023score,
   title = {SCoRe: Submodular Combinatorial Representation Learning for Real-World Class-Imbalanced Settings},
-  author = {Majee, Anay and Kothawade, Suraj and Killamsetty, Krishnateja and Iyer, Rishabh},
+  author = {Anonymous Authors},
   booktitle = {Under Review},
-  year = {2023},
+  year = {2024},
 }
 ```
