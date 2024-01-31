@@ -1,6 +1,8 @@
 data/*
 */__pycache__/*
 output/*
+save/*
 wandb/*
 __pycache__/
+datasets/*
 .env
