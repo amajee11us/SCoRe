@@ -134,7 +134,7 @@ Available choice of options common to stage 1 and stage 2 model training :
 Please feel free to cite our work when using this repo.
 ```
 @inproceedings{score,
-  title = {SCoRe: Submodular Combinatorial Representation Learning for Real-World Class-Imbalanced Settings},
+  title = {SCoRe: Submodular Combinatorial Representation Learning},
   author = {Anonymous Authors},
   booktitle = {Under Review},
   year = {2024},
