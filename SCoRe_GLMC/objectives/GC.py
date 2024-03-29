@@ -22,8 +22,23 @@ class GraphCut(nn.Module):
         self.temperature = temperature
         self.base_temperature = 0.07
 
-    def forward(self, features, features_contrast):
+    def forward(self, features, features_contrast, labels=None, label_weight=None):         
+        device = (torch.device('cuda')
+                  if features.is_cuda
+                  else torch.device('cpu'))   
+        
         batch_size = features.shape[0]
+        labels = labels.contiguous().view(-1, 1)
+        label_weight = label_weight.view(-1, 1) 
+        if labels.shape[0] != batch_size:
+            raise ValueError('Num of labels does not match num of features')
+        mask_pos = torch.eq(labels, labels.T).float().to(device)
+        mask_pos = label_weight * mask_pos        
+        mask_neg = 1.0 - mask_pos
+        
+        # Remove the self similarity between samples
+        mask_pos.fill_diagonal_(0)
+        mask_neg.fill_diagonal_(0)
         
         normalized_anchors = F.normalize(features, p=2, dim=1)
         normalized_contrast = F.normalize(features_contrast, p=2, dim=1)
@@ -36,9 +51,5 @@ class GraphCut(nn.Module):
             -self.lamda * sim_kernel.sum(1),
             mask.sum(1)
         )
-        
-        # loss = - (self.temperature / self.base_temperature) * loss
-        
-        # loss = loss.view(anchor_count, batch_size).mean()
 
         return loss.mean()
