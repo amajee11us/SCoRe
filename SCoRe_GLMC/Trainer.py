@@ -246,12 +246,8 @@ class Trainer(object):
 
         elif version == 'simplified':  # same thing, much faster. Scroll down, speed test in __main__
             return - F.cosine_similarity(p, z, dim=-1).mean()
-        elif version == 'FL':
+        elif version == 'FL' or version == 'GC':
             return self.comb_loss(p, z, target, loss_weight) 
-        elif version == 'GC':
-            pass
-        elif version == 'GC':
-            pass
         else:
             raise Exception
 
