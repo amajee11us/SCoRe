@@ -186,30 +186,44 @@ def set_loader(opt):
     if opt.dataset == 'cifar10':
         mean = (0.4914, 0.4822, 0.4465)
         std = (0.2023, 0.1994, 0.2010)
+        
+        normalize = transforms.Normalize(mean=mean, std=std)
+        
+        train_transform = transforms.Compose([
+            transforms.RandomResizedCrop(size=32, scale=(0.2, 1.)),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+        ])
     elif opt.dataset[-5:] == 'mnist': # this is a single channel dataset
         opt.data_folder = os.path.join(opt.data_folder, "medmnist")
         mean = (0.5)
         std = (0.5)
+        
+        normalize = transforms.Normalize(mean=mean, std=std)
+        train_transform = transforms.Compose([
+            transforms.RandomResizedCrop(size=28, scale=(0.2, 1.)),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+        ])
     elif opt.dataset == 'cifar100':
         mean = (0.5071, 0.4867, 0.4408)
         std = (0.2675, 0.2565, 0.2761)
+        
+        normalize = transforms.Normalize(mean=mean, std=std)
+        train_transform = transforms.Compose([
+            transforms.RandomResizedCrop(size=32, scale=(0.2, 1.)),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+        ])
     elif opt.dataset == 'cubs':
         mean = (123., 117., 104.)
         std = (1., 1., 1.)
-    elif opt.dataset == 'imagenet':
-        mean = (0.485, 0.456, 0.406)
-        std = (0.229, 0.224, 0.225)
-    else:
-        raise ValueError('dataset not supported: {}'.format(opt.dataset))
-    normalize = transforms.Normalize(mean=mean, std=std)
-
-    train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(size=32, scale=(0.2, 1.)),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        normalize,
-    ])
-    train_transform_cubs = transforms.Compose([
+        
+        normalize = transforms.Normalize(mean=mean, std=std)
+        train_transform = transforms.Compose([
             transforms.Resize(256),
             transforms.RandomResizedCrop(size=224),
             transforms.RandomHorizontalFlip(),
@@ -217,17 +231,31 @@ def set_loader(opt):
             scale_255(),
             normalize
         ])
+    elif opt.dataset == 'imagenet':
+        mean = (0.485, 0.456, 0.406)
+        std = (0.229, 0.224, 0.225)
+        
+        normalize = transforms.Normalize(mean=mean, std=std)
+        train_transform = transforms.Compose([
+            transforms.RandomResizedCrop(size=224, scale=(0.2, 1.)),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+        ])
+    else:
+        raise ValueError('dataset not supported: {}'.format(opt.dataset))
 
     val_transform = transforms.Compose([
         transforms.ToTensor(),
         normalize,
     ])
-    val_transform_cubs = transforms.Compose([
-        transforms.Resize(size=(224,224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=(0.485, 0.456, 0.406), 
-                             std=(0.229, 0.224, 0.225)),
-    ])
+    if opt.dataset == 'cubs':
+        val_transform = transforms.Compose([
+            transforms.Resize(size=(224,224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406), 
+                                std=(0.229, 0.224, 0.225)),
+        ])
 
     if opt.dataset == 'cifar10':
         train_dataset = datasets.CIFAR10(root=opt.data_folder,
@@ -260,14 +288,14 @@ def set_loader(opt):
                                         transform=val_transform)
     elif opt.dataset == 'cubs':
         train_dataset = CUBS(root=opt.data_folder, train = True,
-                                            transform=train_transform_cubs)
+                                            transform=train_transform)
         val_dataset = CUBS(root=opt.data_folder, train = False,
-                                            transform=val_transform_cubs)
+                                            transform=val_transform)
     elif opt.dataset == 'imagenet':
         train_dataset = ImageNet(root=opt.data_folder, split='train',
-                                 transform=train_transform_cubs)
+                                 transform=train_transform)
         val_dataset = ImageNet(root=opt.data_folder, split='val',
-                               transform=val_transform_cubs)
+                               transform=val_transform)
     else:
         raise ValueError(opt.dataset)
 
