@@ -127,16 +127,21 @@ Available choice of options common to stage 1 and stage 2 model training :
 | Graph-Cut [$S_{f}$] (ours)                   | 89.20                 | 76.89                 | 95.60               | 72.47                                 |
 | Graph-Cut [$C_{f}$] (ours)                   | 90.83                 | 87.37                 | 96.55               | 73.56                                 |
 | LogDet [$C_{f}$] (ours)                      | 90.80                 | 87.00                 | 95.98               | 73.11                                 |
-| FL [$C_{f}$/ $S_{f}$] (ours)                 | **91.80**             | **87.49**             | **96.87**           | **74.31**                             |
+| FL [ $C_{f}$ / $S_{f}$ ] (ours)                 | **91.80**             | **87.49**             | **96.87**           | **74.31**                             |
 
 
 ## Citation
 Please feel free to cite our work when using this repo.
 ```
-@inproceedings{score,
-  title = {SCoRe: Submodular Combinatorial Representation Learning},
-  author = {Anonymous Authors},
-  booktitle = {Under Review},
-  year = {2024},
+
+@InProceedings{score2024,
+  title = 	 {{SC}o{R}e: Submodular Combinatorial Representation Learning},
+  author =       {Majee, Anay and Kothawade, Suraj Nandkishor and Killamsetty, Krishnateja and Iyer, Rishabh K},
+  booktitle = 	 {Proceedings of the 41st International Conference on Machine Learning},
+  pages = 	 {34327--34349},
+  year = 	 {2024},
+  volume = 	 {235},
+  publisher =    {PMLR}
 }
+
 ```
